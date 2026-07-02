@@ -3,17 +3,17 @@ require 'redmine'
 Redmine::Plugin.register :redmine_ticket_reply do
   name        'Ticket Reply (E-Mail)'
   author      'admnwrk'
+  url         'https://github.com/admnwrk/redmine_ticket_reply'
   description 'Sendet aus einem Ticket heraus E-Mails an frei waehlbare Empfaenger (To/CC/BCC) ' \
               'mit eigener Vorlage fuer interne und externe Empfaenger.'
-  version     '1.2.2'
-  url		  'https://github.com/admnwrk/redmine_ticket_reply'
+  version     '1.3.0'
   requires_redmine version_or_higher: '4.2.0'
 
   settings(
     default: {
       'from_address'          => '',                                       # leer => Setting.mail_from
       'reply_to'              => '',                                       # leer => wie From
-      'internal_domain'       => 'fake.de',                                # Empfaenger dieser Domaene = intern
+      'internal_domain'       => 'mail-adresse.com',                                # Empfaenger dieser Domaene = intern
       'truncate_marker'       => '----- Bitte oberhalb dieser Linie antworten -----',
       'canned_dir'            => '',                                       # leer => <plugin>/canned
       'signature_field'       => 'E-Mail-Signatur',                        # Name des Benutzer-Custom-Fields
