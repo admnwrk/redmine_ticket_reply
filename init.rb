@@ -2,10 +2,11 @@ require 'redmine'
 
 Redmine::Plugin.register :redmine_ticket_reply do
   name        'Ticket Reply (E-Mail)'
-  author      'IT'
+  author      'admnwrk'
   description 'Sendet aus einem Ticket heraus E-Mails an frei waehlbare Empfaenger (To/CC/BCC) ' \
               'mit eigener Vorlage fuer interne und externe Empfaenger.'
   version     '1.2.2'
+  url		  'https://github.com/admnwrk/redmine_ticket_reply'
   requires_redmine version_or_higher: '4.2.0'
 
   settings(
