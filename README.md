@@ -6,11 +6,11 @@ Mail wird als Notiz im Ticket protokolliert.
 
 ## Funktionsweise
 
-- Button **„Per E-Mail antworten"** auf der Ticketseite (unter den Details).
+- Button **"Per E-Mail antworten"** auf der Ticketseite (unter den Details).
 - Compose-Formular mit To / CC / BCC, Betreff, Text, Vorlagenwahl und Auswahl
   vorhandener Ticket-Anhänge.
 - Vorlage wird automatisch vorgewählt: gehören **alle** Empfänger zur internen
-  Domäne → „Intern", sonst → „Extern". Manuell übersteuerbar.
+  Domäne → "Intern", sonst → "Extern". Manuell übersteuerbar.
 - Versand über die in `config/configuration.yml` konfigurierte SMTP-Verbindung
   (dieselbe wie für normale Redmine-Mails).
 - From/Reply-To kommen aus den Plugin-Einstellungen (Default: globale
@@ -26,20 +26,20 @@ Mail wird als Notiz im Ticket protokolliert.
    keine Tabellen an). `bundle exec rake redmine:plugins:migrate` schadet aber
    nicht.
 3. **Administration → Plugins → Konfigurieren:**
-   - Absenderadresse (From): `technik@fake.de`
-   - Reply-To: `technik@fake.de` (das per IMAP abgeholte Postfach)
-   - Interne Domäne: `fake.de`
+   - Absenderadresse (From): `info@fake.com`
+   - Reply-To: `info@fake.com` (das per IMAP abgeholte Postfach)
+   - Interne Domäne: `fake.com` (User im System)
    - Antwort-Trennzeile: z. B. `----- Bitte oberhalb dieser Linie antworten -----`
-4. **Projekt → Einstellungen → Module:** „Ticket-Antwort (E-Mail)" aktivieren.
+4. **Projekt → Einstellungen → Module:** "Ticket-Antwort (E-Mail)" aktivieren.
 5. **Administration → Rollen und Rechte:** der gewünschten Rolle das Recht
-   „Ticket-Antwort per E-Mail senden" geben.
-6. **Administration → Konfiguration → Eingehende E-Mails →** „E-Mails nach einer
+   "Ticket-Antwort per E-Mail senden" geben.
+6. **Administration → Konfiguration → Eingehende E-Mails →** "E-Mails nach einer
    dieser Zeilen abschneiden": dieselbe Trennzeile eintragen, damit zitierte
    Verläufe bei eingehenden Antworten abgeschnitten werden.
 7. Empfehlung bei Ein-Postfach-Betrieb: Redmine-Emissionsadresse
    (Administration → Konfiguration → E-Mail-Benachrichtigungen) ebenfalls auf
-   `technik@fake.de` setzen, und IMAP-Abruf (`fetchMails.sh`) auf `technik@`
-   umstellen.
+   `info@fake.com` setzen, und IMAP-Abruf (`fetchMails.sh`) auf `info@`
+   comstellen.
 
 ## Anpassen
 
@@ -52,7 +52,7 @@ Mail wird als Notiz im Ticket protokolliert.
 - Datei-Upload direkt im Formular (derzeit nur Auswahl vorhandener
   Ticket-Anhänge).
 - Textbausteine / Signaturen pro Benutzer oder Projekt.
-- Statusänderung beim Senden (z. B. „warten auf Kunde").
+- Statusänderung beim Senden (z. B. "warten auf Kunde").
 
 ## Textbausteine (Vorlagen)
 
@@ -148,21 +148,21 @@ Formulars für das jeweilige Ticket/den angemeldeten Agenten ersetzt:
 Jeder Agent pflegt seine eigene Signatur in seinem Redmine-Profil:
 
 1. **Administration → Benutzerdefinierte Felder → Benutzer → Neues Feld:**
-   Format „Langer Text", Name z. B. `E-Mail-Signatur`. Für die Rollen
+   Format "Langer Text", Name z. B. `E-Mail-Signatur`. Für die Rollen
    sichtbar/bearbeitbar machen.
-2. Der Feldname muss mit der Plugin-Einstellung **„Signatur-Feld (Benutzer)"**
+2. Der Feldname muss mit der Plugin-Einstellung **"Signatur-Feld (Benutzer)"**
    übereinstimmen (Default: `E-Mail-Signatur`).
-3. Jeder Agent trägt seine Signatur unter **„Mein Konto"** ein.
+3. Jeder Agent trägt seine Signatur unter **"Mein Konto"** ein.
 
 Verhalten:
 
-- Ist **„Signatur automatisch anhängen"** aktiv (Default), wird die Signatur des
+- Ist **"Signatur automatisch anhängen"** aktiv (Default), wird die Signatur des
   angemeldeten Agenten ans Ende der Mail gehängt – außer der Text enthält sie
   bereits (z. B. weil ein Baustein `{{signature}}` verwendet). So gibt es keine
   doppelte Signatur.
 - Mit `{{signature}}` platzierst du die Signatur in einem Baustein an einer
   bestimmten Stelle selbst.
-- Hat ein Agent keine eigene Signatur hinterlegt, greift die **„Standard-Signatur"**
+- Hat ein Agent keine eigene Signatur hinterlegt, greift die **"Standard-Signatur"**
   aus den Plugin-Einstellungen (falls gesetzt).
 
 Signaturen und Bausteine brauchen **keinen Neustart** – sie werden bei jedem
@@ -170,11 +170,11 @@ Signaturen und Bausteine brauchen **keinen Neustart** – sie werden bei jedem
 
 ## Ticket beim Senden schließen
 
-Im Antwortformular gibt es den Haken „Ticket nach dem Senden schließen".
+Im Antwortformular gibt es den Haken "Ticket nach dem Senden schließen".
 Ablauf: Die Mail wird zuerst versendet, danach wird der Status auf einen
 geschlossenen Status gesetzt.
 
-- Welcher Status: Plugin-Einstellung „Status beim Schließen" (Name). Leer =
+- Welcher Status: Plugin-Einstellung "Status beim Schließen" (Name). Leer =
   erster laut Workflow erlaubter geschlossener Status.
 - **Abhängigkeiten werden abgefangen:** Lässt sich das Ticket nicht schließen
   (z. B. weil es durch ein offenes anderes Ticket blockiert ist, offene
@@ -189,7 +189,7 @@ Durchgestrichen, Listen, Links, Code …) – abhängig von der eingestellten
 Textauszeichnung (Markdown/Textile). Unterstreichen ist in Markdown nicht
 vorgesehen und daher nicht in der Leiste.
 
-Über die Tabs „Bearbeiten" / „Vorschau" siehst du das gerenderte Ergebnis. Der
+Über die Tabs "Bearbeiten" / "Vorschau" siehst du das gerenderte Ergebnis. Der
 Text wird in der E-Mail genauso gerendert wie ein Ticket-Kommentar: Der
 HTML-Teil enthält die formatierte Fassung, der Text-Teil die Markup-Quelle.
 
@@ -226,7 +226,7 @@ Im Antwortformular wird dann:
   Postfächer (Reply-All).
 
 Eigene Postfächer/Aliase, die aus dem CC entfernt werden sollen, trägst du in der
-Plugin-Einstellung „Eigene Postfächer/Aliase" ein (From/Reply-To/globale
+Plugin-Einstellung "Eigene Postfächer/Aliase" ein (From/Reply-To/globale
 Absenderadresse sind automatisch dabei). Der letzte Absender wird zusätzlich am
 Ticket angezeigt.
 
@@ -267,7 +267,7 @@ Folgen für ein Redmine-Update:
   die automatische Vorbefüllung würde fehlen.
 
 **Nach einem Redmine-Upgrade prüfen:** Eine Testmail ans System schicken und am
-Ticket kontrollieren, ob „Letzter Mail-Absender" gefüllt wird (bzw. im
+Ticket kontrollieren, ob "Letzter Mail-Absender" gefüllt wird (bzw. im
 `production.log` nach `[TicketReply] ContactCapture` schauen). Erscheint nichts,
 müssen nur die zwei Methodennamen in `mail_handler_patch.rb` an die neue
 Redmine-Version angepasst werden – eine Ein-Zeilen-Änderung pro Methode.
