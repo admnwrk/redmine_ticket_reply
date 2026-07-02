@@ -6,6 +6,8 @@ mail is logged as a note on the ticket.
 
 > Deutsche Version: siehe [README_de.md](README_de.md).
 
+The following instructions are for inserting the plugin into a docker container with volumes set up.
+
 ## How it works
 
 - **"Reply by email"** button on the ticket page (below the details).
@@ -38,14 +40,14 @@ Verify this first under **Administration → Settings → Email notifications �
    the `ticket_reply_contacts` table – see "Address capture" below):
 
    ```
-   docker exec hitredmine bash -lc 'cd /usr/src/redmine && RAILS_ENV=production bin/rails redmine:plugins:migrate'
+   docker exec redmine-containername bash -lc 'cd /usr/src/redmine && RAILS_ENV=production bin/rails redmine:plugins:migrate'
    docker compose restart redmine
    ```
 3. **Administration → Plugins → Configure:**
-   - Sender address (From): `absender@mail-adresse.com`
-   - Reply-To: `antwort@mail-adresse.com` (the mailbox fetched via IMAP)
-   - Internal domain: `mail-adresse.com` (users in the system)
-   - Reply separator line: e.g. `----- Bitte oberhalb dieser Linie antworten -----`
+   - Sender address (From): `sender@mail-address.com`
+   - Reply-To: `reply@mail-address.com` (the mailbox fetched via IMAP)
+   - Internal domain: `mail-address.com` (users in the system)
+   - Reply separator line: e.g. `----- Please reply above this line -----`
 4. **Project → Settings → Modules:** enable "Ticket reply (email)".
 5. **Administration → Roles and permissions:** grant the desired role the
    permission "Send ticket reply by email".
@@ -53,8 +55,8 @@ Verify this first under **Administration → Settings → Email notifications �
    of these lines": enter the same separator line, so quoted histories are cut
    off on incoming replies.
 7. Recommendation for single-mailbox operation: set the Redmine emission address
-   (Administration → Settings → Email notifications) to `absender@mail-adresse.com`
-   as well, and point the IMAP fetch (`fetchMails.sh`) at `absender@`.
+   (Administration → Settings → Email notifications) to `sender@mail-address.com`
+   as well, and point the IMAP fetch (`fetchMails.sh`) at `sender@`.
 
 ## Customizing
 
@@ -72,7 +74,7 @@ text (freely editable afterwards).
 **File format:**
 
 ```
-Betreff: [Acknowledgement] {{subject}}
+Subject: [Acknowledgement] {{subject}}
 
 Hello,
 
