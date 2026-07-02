@@ -1,278 +1,267 @@
 # redmine_ticket_reply
 
-Aus einem Redmine-Ticket heraus E-Mails an frei wählbare Empfänger (To/CC/BCC)
-senden – mit eigener Vorlage für interne und externe Empfänger. Die gesendete
-Mail wird als Notiz im Ticket protokolliert.
+Send emails to freely chosen recipients (To/CC/BCC) straight from a Redmine
+ticket – with separate templates for internal and external recipients. The sent
+mail is logged as a note on the ticket.
 
-## Funktionsweise
+> Deutsche Version: siehe [README_de.md](README_de.md).
 
-- Button **"Per E-Mail antworten"** auf der Ticketseite (unter den Details).
-- Compose-Formular mit To / CC / BCC, Betreff, Text, Vorlagenwahl und Auswahl
-  vorhandener Ticket-Anhänge.
-- Vorlage wird automatisch vorgewählt: gehören **alle** Empfänger zur internen
-  Domäne → "Intern", sonst → "Extern". Manuell übersteuerbar.
-- Versand über die in `config/configuration.yml` konfigurierte SMTP-Verbindung
-  (dieselbe wie für normale Redmine-Mails).
-- From/Reply-To kommen aus den Plugin-Einstellungen (Default: globale
-  Redmine-Absenderadresse).
-- Antworten der Empfänger landen über die `#ID` im Betreff wieder am Ticket
-  (Standard-Redmine-Mailhandler).
+## How it works
+
+- **"Reply by email"** button on the ticket page (below the details).
+- Compose form with To / CC / BCC, subject, text, template selection and a
+  picker for existing ticket attachments.
+- The template is preselected automatically: if **all** recipients belong to the
+  internal domain → "Internal", otherwise → "External". Can be overridden
+  manually.
+- Delivery uses the SMTP connection configured in `config/configuration.yml`
+  (the same one Redmine uses for its regular mails).
+- From/Reply-To come from the plugin settings (default: the global Redmine
+  sender address).
+- Recipient replies are routed back to the ticket via the `#ID` in the subject
+  (standard Redmine mail handler).
+
+## Requirements
+
+**A working outgoing mailer must be configured in Redmine before this plugin can
+send anything.** The plugin uses Redmine's own mail delivery
+(`config/configuration.yml` → `email_delivery` / SMTP). If Redmine cannot send
+mail (e.g. no SMTP host configured, relay not reachable), the reply will fail.
+Verify this first under **Administration → Settings → Email notifications →
+"Send a test email"** – only once that test mail arrives will this plugin work.
 
 ## Installation
 
-1. Ordner nach `plugins/redmine_ticket_reply` legen (im gemounteten
-   `redmine_plugins`-Volume).
-2. Redmine neu starten. Eine DB-Migration ist **nicht** nötig (das Plugin legt
-   keine Tabellen an). `bundle exec rake redmine:plugins:migrate` schadet aber
-   nicht.
-3. **Administration → Plugins → Konfigurieren:**
-   - Absenderadresse (From): `info@fake.com`
-   - Reply-To: `info@fake.com` (das per IMAP abgeholte Postfach)
-   - Interne Domäne: `fake.com` (User im System)
-   - Antwort-Trennzeile: z. B. `----- Bitte oberhalb dieser Linie antworten -----`
-4. **Projekt → Einstellungen → Module:** "Ticket-Antwort (E-Mail)" aktivieren.
-5. **Administration → Rollen und Rechte:** der gewünschten Rolle das Recht
-   "Ticket-Antwort per E-Mail senden" geben.
-6. **Administration → Konfiguration → Eingehende E-Mails →** "E-Mails nach einer
-   dieser Zeilen abschneiden": dieselbe Trennzeile eintragen, damit zitierte
-   Verläufe bei eingehenden Antworten abgeschnitten werden.
-7. Empfehlung bei Ein-Postfach-Betrieb: Redmine-Emissionsadresse
-   (Administration → Konfiguration → E-Mail-Benachrichtigungen) ebenfalls auf
-   `info@fake.com` setzen, und IMAP-Abruf (`fetchMails.sh`) auf `info@`
-   comstellen.
+1. Put the folder into `plugins/redmine_ticket_reply` (inside the mounted
+   `redmine_plugins` volume).
+2. Restart Redmine. A DB migration **is** required for this version (it creates
+   the `ticket_reply_contacts` table – see "Address capture" below):
 
-## Anpassen
+   ```
+   docker exec hitredmine bash -lc 'cd /usr/src/redmine && RAILS_ENV=production bin/rails redmine:plugins:migrate'
+   docker compose restart redmine
+   ```
+3. **Administration → Plugins → Configure:**
+   - Sender address (From): `absender@mail-adresse.com`
+   - Reply-To: `antwort@mail-adresse.com` (the mailbox fetched via IMAP)
+   - Internal domain: `mail-adresse.com` (users in the system)
+   - Reply separator line: e.g. `----- Bitte oberhalb dieser Linie antworten -----`
+4. **Project → Settings → Modules:** enable "Ticket reply (email)".
+5. **Administration → Roles and permissions:** grant the desired role the
+   permission "Send ticket reply by email".
+6. **Administration → Settings → Incoming emails →** "Truncate emails after one
+   of these lines": enter the same separator line, so quoted histories are cut
+   off on incoming replies.
+7. Recommendation for single-mailbox operation: set the Redmine emission address
+   (Administration → Settings → Email notifications) to `absender@mail-adresse.com`
+   as well, and point the IMAP fetch (`fetchMails.sh`) at `absender@`.
+
+## Customizing
 
 - Templates: `app/views/ticket_reply_mailer/{external,internal}_reply.{text,html}.erb`
-- Der eingegebene Text wird als reiner Text behandelt (Zeilenumbrüche werden im
-  HTML zu `<br>`).
+- The entered text is rendered like a ticket comment (Markdown/Textile according
+  to the Redmine text formatting setting); the HTML part contains the formatted
+  version, the text part the markup source.
 
-## Erweiterungsideen
+## Canned responses (templates)
 
-- Datei-Upload direkt im Formular (derzeit nur Auswahl vorhandener
-  Ticket-Anhänge).
-- Textbausteine / Signaturen pro Benutzer oder Projekt.
-- Statusänderung beim Senden (z. B. "warten auf Kunde").
+Canned responses are plain files (`.txt` or `.md`). Each file = one entry in the
+"Canned response" dropdown in the reply form. Selecting one prefills subject and
+text (freely editable afterwards).
 
-## Textbausteine (Vorlagen)
-
-Textbausteine sind einfache Dateien (`.txt` oder `.md`). Jede Datei = ein
-Eintrag im Dropdown "Textbaustein" im Antwortformular. Beim Auswählen werden
-Betreff und Text vorbefüllt (danach frei editierbar).
-
-**Format einer Datei:**
+**File format:**
 
 ```
-Betreff: [Eingangsbestätigung] {{subject}}
+Betreff: [Acknowledgement] {{subject}}
 
-Guten Tag,
+Hello,
 
-vielen Dank für Ihre Nachricht (Vorgang #{{id}}) ...
+thank you for your message (ticket #{{id}}) ...
 
-Mit freundlichen Grüßen
+Kind regards
 {{agent}}
 ```
 
-- Die erste Zeile `Betreff:` (oder `Subject:`) ist optional und setzt den Betreff.
-- Der Rest ist der Text.
-- Der Dateiname bestimmt Reihenfolge und Beschriftung: `01_eingangsbestaetigung.md`
-  → Label "eingangsbestaetigung" (führende Ziffern + `_` werden entfernt,
-  `_` wird zu Leerzeichen).
+- The first line `Betreff:` (or `Subject:`) is optional and sets the subject.
+- The rest is the body.
+- The file name determines order and label: `01_acknowledgement.md` → label
+  "acknowledgement" (leading digits + `_` are stripped, `_` becomes a space).
 
-**Platzhalter** (werden beim Öffnen des Formulars ersetzt):
+### Where do the templates live? Two options
 
-| Platzhalter            | Inhalt                          |
-|------------------------|---------------------------------|
-| `{{id}}`               | Vorgangsnummer                  |
-| `{{subject}}`          | Ticket-Betreff                  |
-| `{{status}}`           | Status                          |
-| `{{author}}`           | Name des Melders                |
-| `{{author_firstname}}` | Vorname des Melders             |
-| `{{assignee}}`         | Name des Bearbeiters            |
-| `{{agent}}`            | Vorname des angemeldeten Agenten|
-| `{{agent_name}}`       | Voller Name des Agenten         |
-
-### Wo liegen die Bausteine? Zwei Möglichkeiten
-
-**A) Im Plugin-Ordner (einfachste Variante).** Ablage unter
-`canned/` im Plugin. Da dein Plugins-Ordner ohnehin als Volume gemountet ist,
-editierst du die Dateien direkt auf dem Host:
+**A) In the plugin folder (simplest).** Store them under `canned/` in the
+plugin. Since your plugins folder is mounted as a volume anyway, you edit the
+files directly on the host:
 
 ```
-./redmine_plugins/redmine_ticket_reply/canned/05_meine_vorlage.md
+./redmine_plugins/redmine_ticket_reply/canned/05_my_template.md
 ```
 
-Nachteil: bei einem Plugin-Update/Überschreiben können sie verloren gehen.
+Downside: they can be lost on a plugin update/overwrite.
 
-**B) Eigenes Volume (empfohlen für eigene Bausteine).** Lege die Vorlagen außerhalb
-des Plugins ab und mounte sie. In der `docker-compose.yml` beim `redmine`-Service:
+**B) Own volume (recommended for your own templates).** Place the templates
+outside the plugin and mount them. In `docker-compose.yml` on the `redmine`
+service:
 
 ```yaml
     volumes:
-      # ... bestehende Mounts ...
+      # ... existing mounts ...
       - ./redmine_templates:/redmine_templates
 ```
 
-Dann in Administration → Plugins → "Ticket Reply (E-Mail)" konfigurieren:
-"Vorlagen-Verzeichnis" = `/redmine_templates`. Die Dateien liegen jetzt auf dem
-Host unter `./redmine_templates/*.md` und überleben Plugin-Updates.
+Then configure under Administration → Plugins → "Ticket Reply (E-Mail)":
+"Templates directory" = `/redmine_templates`. The files now live on the host
+under `./redmine_templates/*.md` and survive plugin updates.
 
-### In Betrieb nehmen
+### Putting it into operation
 
-- **Baustein hinzufügen/ändern:** Datei anlegen/bearbeiten – **kein Neustart nötig**,
-  die Bausteine werden bei jedem Öffnen des Formulars frisch eingelesen. (Bei
-  Variante B mit neuem Volume einmalig `docker compose up -d` zum Einhängen.)
-- **ERB-Templates ändern** (`app/views/ticket_reply_mailer/*.erb`, also die Hülle
-  mit Grußrahmen/Footer): Diese werden in Produktion zwischengespeichert, daher
-  danach den Container neu starten: `docker compose restart redmine`.
+- **Add/change a template:** create/edit a file – **no restart needed**, the
+  templates are read fresh every time the form is opened. (With option B and a
+  new volume, run `docker compose up -d` once to mount it.)
+- **Change ERB templates** (`app/views/ticket_reply_mailer/*.erb`, i.e. the
+  wrapper with greeting frame/footer): these are cached in production, so restart
+  the container afterwards: `docker compose restart redmine`.
 
-## Verfügbare Platzhalter (Variablen)
+## Available placeholders (variables)
 
-In Bausteinen, Betreff und Signatur verwendbar. Werden beim Öffnen des
-Formulars für das jeweilige Ticket/den angemeldeten Agenten ersetzt:
+Usable in canned responses, subject and signature. Replaced when the form is
+opened, for the given ticket / logged-in agent:
 
-| Platzhalter            | Inhalt                              |
-|------------------------|-------------------------------------|
-| `{{id}}`               | Vorgangsnummer                      |
-| `{{subject}}`          | Ticket-Betreff                      |
-| `{{status}}`           | Status                              |
-| `{{author}}`           | Name des Melders                    |
-| `{{author_firstname}}` | Vorname des Melders                 |
-| `{{assignee}}`         | Name des Bearbeiters                |
-| `{{agent}}`            | Vorname des angemeldeten Agenten    |
-| `{{agent_name}}`       | Voller Name des angemeldeten Agenten|
-| `{{signature}}`        | Signatur des angemeldeten Agenten   |
+| Placeholder            | Content                          |
+|------------------------|----------------------------------|
+| `{{id}}`               | Ticket number                    |
+| `{{subject}}`          | Ticket subject                   |
+| `{{status}}`           | Status                           |
+| `{{author}}`           | Reporter name                    |
+| `{{author_firstname}}` | Reporter first name              |
+| `{{assignee}}`         | Assignee name                    |
+| `{{agent}}`            | First name of the logged-in agent|
+| `{{agent_name}}`       | Full name of the logged-in agent |
+| `{{signature}}`        | Signature of the logged-in agent |
 
-## Signaturen (pro Benutzer)
+## Signatures (per user)
 
-Jeder Agent pflegt seine eigene Signatur in seinem Redmine-Profil:
+Each agent maintains their own signature in their Redmine profile:
 
-1. **Administration → Benutzerdefinierte Felder → Benutzer → Neues Feld:**
-   Format "Langer Text", Name z. B. `E-Mail-Signatur`. Für die Rollen
-   sichtbar/bearbeitbar machen.
-2. Der Feldname muss mit der Plugin-Einstellung **"Signatur-Feld (Benutzer)"**
-   übereinstimmen (Default: `E-Mail-Signatur`).
-3. Jeder Agent trägt seine Signatur unter **"Mein Konto"** ein.
+1. **Administration → Custom fields → Users → New field:** format "Long text",
+   name e.g. `E-Mail-Signatur`. Make it visible/editable for the roles.
+2. The field name must match the plugin setting **"Signature field (user)"**
+   (default: `E-Mail-Signatur`).
+3. Each agent enters their signature under **"My account"**.
 
-Verhalten:
+Behaviour:
 
-- Ist **"Signatur automatisch anhängen"** aktiv (Default), wird die Signatur des
-  angemeldeten Agenten ans Ende der Mail gehängt – außer der Text enthält sie
-  bereits (z. B. weil ein Baustein `{{signature}}` verwendet). So gibt es keine
-  doppelte Signatur.
-- Mit `{{signature}}` platzierst du die Signatur in einem Baustein an einer
-  bestimmten Stelle selbst.
-- Hat ein Agent keine eigene Signatur hinterlegt, greift die **"Standard-Signatur"**
-  aus den Plugin-Einstellungen (falls gesetzt).
+- If **"Append signature automatically"** is on (default), the logged-in agent's
+  signature is appended to the end of the mail – unless the text already contains
+  it (e.g. because a canned response uses `{{signature}}`). This avoids a
+  duplicate signature.
+- With `{{signature}}` you place the signature at a specific spot in a canned
+  response yourself.
+- If an agent has no own signature, the **"Default signature"** from the plugin
+  settings applies (if set).
 
-Signaturen und Bausteine brauchen **keinen Neustart** – sie werden bei jedem
-Öffnen des Formulars frisch gelesen.
+Signatures and canned responses need **no restart** – they are read fresh every
+time the form is opened.
 
-## Ticket beim Senden schließen
+## Closing the ticket on send
 
-Im Antwortformular gibt es den Haken "Ticket nach dem Senden schließen".
-Ablauf: Die Mail wird zuerst versendet, danach wird der Status auf einen
-geschlossenen Status gesetzt.
+The reply form has a checkbox "Close the ticket after sending". Flow: the mail is
+sent first, then the status is set to a closed status.
 
-- Welcher Status: Plugin-Einstellung "Status beim Schließen" (Name). Leer =
-  erster laut Workflow erlaubter geschlossener Status.
-- **Abhängigkeiten werden abgefangen:** Lässt sich das Ticket nicht schließen
-  (z. B. weil es durch ein offenes anderes Ticket blockiert ist, offene
-  Unteraufgaben hat oder der Workflow den Übergang nicht erlaubt), bleibt die
-  Notiz erhalten, das Ticket bleibt offen, und im Formular erscheint eine
-  Warnung mit dem konkreten Grund. Die Mail ist in jedem Fall raus.
+- Which status: plugin setting "Status when closing" (name). Empty = first closed
+  status allowed by the workflow.
+- **Dependencies are handled:** if the ticket cannot be closed (e.g. because it
+  is blocked by another open ticket, has open subtasks, or the workflow does not
+  allow the transition), the note is kept, the ticket stays open, and a warning
+  with the concrete reason is shown in the form. The mail is out in any case.
 
-## Editor (Formatierung) und Vorschau
+## Editor (formatting) and preview
 
-Das Textfeld nutzt die normale Redmine-Wiki-Symbolleiste (Fett, Kursiv,
-Durchgestrichen, Listen, Links, Code …) – abhängig von der eingestellten
-Textauszeichnung (Markdown/Textile). Unterstreichen ist in Markdown nicht
-vorgesehen und daher nicht in der Leiste.
+The text field uses the normal Redmine wiki toolbar (bold, italic, strikethrough,
+lists, links, code …) – depending on the configured text formatting
+(Markdown/Textile). Underline is not available in Markdown and is therefore not
+in the toolbar.
 
-Über die Tabs "Bearbeiten" / "Vorschau" siehst du das gerenderte Ergebnis. Der
-Text wird in der E-Mail genauso gerendert wie ein Ticket-Kommentar: Der
-HTML-Teil enthält die formatierte Fassung, der Text-Teil die Markup-Quelle.
+Use the "Edit" / "Preview" tabs to see the rendered result. In the email the text
+is rendered exactly like a ticket comment: the HTML part contains the formatted
+version, the text part the markup source.
 
-## Versionen
+## Versions
 
-- **1.1.3** – Anzeige der erfassten Adressen zusaetzlich als sichtbarer
-  Server-Kasten (theme-unabhaengig); JS schiebt sie an die Autorenzeile und
-  blendet den Kasten bei Erfolg aus.
+- **1.3.0** – Security hardening: ticket visibility is enforced
+  (`@issue.visible?`), all recipient addresses are validated (format + control
+  characters), CR/LF is stripped from the subject, and error messages no longer
+  expose internal details to the user (server log only). English `README.md`
+  added, German file as `README_de.md`.
 
-- **1.1.2** – Fix: MailHandler-Patch wird jetzt direkt beim Plugin-Laden
-  eingehängt (das fruehere config.to_prepare feuerte in Produktion nicht,
-  weil Redmine Plugins bereits in einem to_prepare-Lauf laedt).
+- **1.2.x** – Interim releases (To/CC/BCC polish, minor fixes); not documented
+  individually.
 
-- **1.1.1** – Erfasster Absender + weitere Adressaten werden direkt an der
-  Autorenzeile des Tickets angezeigt (per View-Hook + JS, keine Migration).
+- **1.1.3** – Captured addresses additionally shown as a visible server-rendered
+  box (theme-independent); JS moves them next to the author line and hides the box
+  on success.
 
-- **1.1.0** – Adress-Erfassung anonymer Mails (From/To/Cc) für An/CC-Vorbefüllung
-  und Reply-All; Anzeige des letzten Absenders am Ticket; MailHandler-Patch.
-- **1.0.0** – Editor-Toolbar + Vorschau, Ticket-Abschluss beim Senden (mit
-  Abhängigkeits-Abfangung), Signaturen pro Benutzer, Textbausteine, Verlauf-Anhang.
+- **1.1.2** – Fix: the MailHandler patch is now applied directly on plugin load
+  (the earlier `config.to_prepare` did not fire in production, because Redmine
+  loads plugins within a `to_prepare` run already).
 
-## Absender/Empfänger anonymer Mails (Adress-Erfassung)
+- **1.1.1** – Captured sender + further recipients are shown directly at the
+  ticket's author line (via view hook + JS, no migration).
 
-Mit `unknown_user=accept` ist der Autor anonymer Mails der Anonymous-Benutzer
-(ohne Mail-Adresse). Damit man trotzdem antworten kann, schneidet das Plugin
-beim IMAP-Empfang `From`, `To` und `Cc` jeder eingehenden Mail mit und speichert
-sie pro Ticket (Tabelle `ticket_reply_contacts`) – bei jeder Folge-Mail neu, also
-immer die Adressen der **zuletzt** eingegangenen Mail.
+- **1.1.0** – Address capture of anonymous mails (From/To/Cc) for To/CC prefill
+  and reply-all; display of the last sender on the ticket; MailHandler patch.
 
-Im Antwortformular wird dann:
+- **1.0.0** – Editor toolbar + preview, ticket closing on send (with dependency
+  handling), per-user signatures, canned responses, history attachment.
 
-- **An** = letzter Absender,
-- **CC** = übrige Empfänger der letzten Mail (To + Cc), ohne eure eigenen
-  Postfächer (Reply-All).
+## Sender/recipients of anonymous mails (address capture)
 
-Eigene Postfächer/Aliase, die aus dem CC entfernt werden sollen, trägst du in der
-Plugin-Einstellung "Eigene Postfächer/Aliase" ein (From/Reply-To/globale
-Absenderadresse sind automatisch dabei). Der letzte Absender wird zusätzlich am
-Ticket angezeigt.
+With `unknown_user=accept` the author of anonymous mails is the Anonymous user
+(without a mail address). To still be able to reply, the plugin captures `From`,
+`To` and `Cc` of every incoming mail on IMAP receipt and stores them per ticket
+(table `ticket_reply_contacts`) – refreshed on every follow-up mail, i.e. always
+the addresses of the **most recent** incoming mail.
 
-**Hinweis:** Die Erfassung greift für Mails, die **nach** der Installation dieser
-Version eingehen. Für Alt-Tickets ist das Feld einmalig leer und wird beim
-nächsten Maileingang gefüllt.
+In the reply form this becomes:
 
-### Migration nötig
+- **To** = last sender,
+- **CC** = remaining recipients of the last mail (To + Cc), without your own
+  mailboxes (reply-all).
 
-Diese Version legt eine Tabelle an:
+Own mailboxes/aliases to be removed from the CC are entered in the plugin setting
+"Own mailboxes/aliases" (From/Reply-To/global sender address are included
+automatically). The last sender is additionally shown on the ticket.
 
-```
-docker exec hitredmine bash -lc 'cd /usr/src/redmine && RAILS_ENV=production bin/rails redmine:plugins:migrate'
-docker compose restart redmine
-```
+**Note:** capture applies to mails arriving **after** installing this version.
+For old tickets the field is empty once and gets filled on the next incoming mail.
 
-## Der MailHandler-Patch und Redmine-Updates
+## The MailHandler patch and Redmine updates
 
-Die Adress-Erfassung hängt sich an zwei Methoden von Redmines `MailHandler`:
-`receive_issue` (neues Ticket aus Mail) und `receive_issue_reply` (Folgeantwort).
+Address capture hooks into two methods of Redmine's `MailHandler`:
+`receive_issue` (new ticket from mail) and `receive_issue_reply` (follow-up).
 
-Technik: Es wird **kein** Redmine-Kernfile verändert. Der Patch ist ein
-`Module#prepend` (Datei `lib/redmine_ticket_reply/mail_handler_patch.rb`), das
-beim Laden des Plugins aktiviert wird (direkter Prepend) und die
-Originalmethode per `super` aufruft.
+Technique: **no** Redmine core file is modified. The patch is a `Module#prepend`
+(file `lib/redmine_ticket_reply/mail_handler_patch.rb`) that is activated on
+plugin load (direct prepend) and calls the original method via `super`.
 
-Folgen für ein Redmine-Update:
+Implications for a Redmine update:
 
-- **Keine Merge-Konflikte:** Da keine Kerndateien angefasst werden, überlebt der
-  Patch ein Redmine-Update unverändert – er wird beim Start automatisch neu
-  aktiviert.
-- **Einzige Kopplung:** die Methodennamen `receive_issue` / `receive_issue_reply`.
-  Diese sind in Redmine seit vielen Versionen stabil.
-- **Robust gegen Wegfall:** Sollte eine künftige Redmine-Version diese Methoden
-  umbenennen oder entfernen, fällt die Adress-Erfassung **still** aus – kein
-  Absturz, da der Aufruf dann an unserem Wrapper vorbeiläuft. Das Antworten
-  funktioniert weiter (man muss die Adresse dann ggf. von Hand eintragen), nur
-  die automatische Vorbefüllung würde fehlen.
+- **No merge conflicts:** since no core files are touched, the patch survives a
+  Redmine update unchanged – it is reactivated automatically at startup.
+- **Only coupling:** the method names `receive_issue` / `receive_issue_reply`.
+  These have been stable in Redmine for many versions.
+- **Robust against removal:** should a future Redmine version rename or remove
+  these methods, address capture fails **silently** – no crash, since the call
+  then bypasses our wrapper. Replying still works (you may have to enter the
+  address manually), only the automatic prefill would be missing.
 
-**Nach einem Redmine-Upgrade prüfen:** Eine Testmail ans System schicken und am
-Ticket kontrollieren, ob "Letzter Mail-Absender" gefüllt wird (bzw. im
-`production.log` nach `[TicketReply] ContactCapture` schauen). Erscheint nichts,
-müssen nur die zwei Methodennamen in `mail_handler_patch.rb` an die neue
-Redmine-Version angepasst werden – eine Ein-Zeilen-Änderung pro Methode.
+**Check after a Redmine upgrade:** send a test mail to the system and check on the
+ticket whether "Last email sender" gets filled (or look for
+`[TicketReply] ContactCapture` in `production.log`). If nothing appears, only the
+two method names in `mail_handler_patch.rb` need to be adapted to the new Redmine
+version – a one-line change per method.
 
-Hinweis: Die übrigen Bausteine (Mailer, Controller, Views, Textbausteine,
-Signaturen, Schließen-Logik) nutzen ausschließlich öffentliche Redmine-/Rails-APIs
-und sind von Redmine-Updates praktisch nicht betroffen. Der MailHandler-Patch ist
-die einzige Stelle, die an Redmine-Interna andockt.
+Note: the remaining building blocks (mailer, controller, views, canned responses,
+signatures, closing logic) use only public Redmine/Rails APIs and are practically
+unaffected by Redmine updates. The MailHandler patch is the only place that hooks
+into Redmine internals.
