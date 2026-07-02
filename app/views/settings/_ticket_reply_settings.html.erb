@@ -1,0 +1,51 @@
+<p>
+  <label><%= l(:setting_from_address, default: 'Absenderadresse (From)') %></label>
+  <%= text_field_tag 'settings[from_address]', @settings['from_address'], size: 40 %>
+  <em class="info">Leer = globale Redmine-Absenderadresse (aktuell: <%= Setting.mail_from %>). Empfehlung: technik@fake.de</em>
+</p>
+<p>
+  <label>Reply-To</label>
+  <%= text_field_tag 'settings[reply_to]', @settings['reply_to'], size: 40 %>
+  <em class="info">Leer = wie From. Sollte das Postfach sein, das per IMAP abgeholt wird.</em>
+</p>
+<p>
+  <label><%= l(:setting_internal_domain, default: 'Interne Domaene') %></label>
+  <%= text_field_tag 'settings[internal_domain]', @settings['internal_domain'], size: 40 %>
+  <em class="info">Empfaenger mit dieser Domaene gelten als intern (Vorlagen-Vorauswahl).</em>
+</p>
+<p>
+  <label><%= l(:setting_truncate_marker, default: 'Antwort-Trennzeile') %></label>
+  <%= text_field_tag 'settings[truncate_marker]', @settings['truncate_marker'], size: 60 %>
+  <em class="info">Dieselbe Zeile zusaetzlich unter &bdquo;Eingehende E-Mails &rarr; E-Mails nach einer dieser Zeilen abschneiden&ldquo; eintragen.</em>
+</p>
+<p>
+  <label><%= l(:setting_canned_dir, default: 'Vorlagen-Verzeichnis') %></label>
+  <%= text_field_tag 'settings[canned_dir]', @settings['canned_dir'], size: 60 %>
+  <em class="info">Pfad im Container mit Textbaustein-Dateien (.txt/.md). Leer = Plugin-Ordner <code>canned/</code>. Z. B. <code>/redmine_templates</code> bei eigenem Volume.</em>
+</p>
+<p>
+  <label><%= l(:setting_signature_field, default: 'Signatur-Feld (Benutzer)') %></label>
+  <%= text_field_tag 'settings[signature_field]', @settings['signature_field'], size: 40 %>
+  <em class="info">Name des Benutzer-Custom-Fields, in dem jeder Agent seine Signatur pflegt (Administration &rarr; Benutzerdefinierte Felder &rarr; Benutzer, Typ &bdquo;Langer Text&ldquo;).</em>
+</p>
+<p>
+  <label><%= l(:setting_auto_append_signature, default: 'Signatur automatisch anhaengen') %></label>
+  <%= hidden_field_tag 'settings[auto_append_signature]', '0' %>
+  <%= check_box_tag 'settings[auto_append_signature]', '1', @settings['auto_append_signature'] == '1' %>
+  <em class="info">Haengt die Signatur des angemeldeten Agenten ans Ende an, falls nicht bereits via <code>{{signature}}</code> enthalten.</em>
+</p>
+<p>
+  <label><%= l(:setting_default_signature, default: 'Standard-Signatur') %></label>
+  <%= text_area_tag 'settings[default_signature]', @settings['default_signature'], rows: 4, cols: 50 %>
+  <em class="info">Fallback, wenn ein Agent keine eigene Signatur hinterlegt hat.</em>
+</p>
+<p>
+  <label><%= l(:setting_close_status, default: 'Status beim Schliessen') %></label>
+  <%= text_field_tag 'settings[close_status]', @settings['close_status'], size: 40 %>
+  <em class="info">Name des Status, der beim Haken &bdquo;Ticket schliessen&ldquo; gesetzt wird. Leer = erster laut Workflow erlaubter geschlossener Status.</em>
+</p>
+<p>
+  <label><%= l(:setting_own_addresses, default: 'Eigene Postfaecher/Aliase') %></label>
+  <%= text_field_tag 'settings[own_addresses]', @settings['own_addresses'], size: 60 %>
+  <em class="info">Komma-getrennt. Diese Adressen werden beim Reply-All (CC-Vorbefuellung) entfernt. From/Reply-To/globale Absenderadresse sind automatisch dabei.</em>
+</p>

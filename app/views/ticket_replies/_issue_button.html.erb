@@ -1,0 +1,76 @@
+<% if User.current.allowed_to?(:send_ticket_reply, issue.project) %>
+  <% c = (TicketReplyContact.find_by(issue_id: issue.id) rescue nil) %>
+  <% if c && c.mail_from.present? %>
+    <%
+      s        = Setting.plugin_redmine_ticket_reply || {}
+      own      = [Setting.mail_from.to_s, s['from_address'].to_s, s['reply_to'].to_s]
+      own     += s['own_addresses'].to_s.split(/[,;]/)
+      own      = own.map { |a| a.to_s.downcase.strip }.reject(&:blank?).uniq
+      sender   = c.mail_from.to_s.strip
+      sender_l = sender.downcase
+      others   = (c.mail_to.to_s.split(/[,;]/) + c.mail_cc.to_s.split(/[,;]/))
+                   .map { |a| a.to_s.strip }.reject(&:blank?)
+                   .reject { |a| own.include?(a.downcase) || a.downcase == sender_l }
+                   .uniq
+    %>
+    <div id="tr-contact-box" class="tr-contact-box"
+         style="margin:6px 0; padding:6px 8px; background:#f6f6f6; border:1px solid #e0e0e0; border-radius:3px;">
+      <strong>Mail-Absender:</strong> <a href="mailto:<%= h sender %>"><%= h sender %></a>
+      <% if others.any? %>
+        <br><strong>Weitere Adressaten:</strong> <%= h others.join(', ') %>
+      <% end %>
+    </div>
+    <span id="tr-author-info"
+          data-mail="<%= h sender %>"
+          data-others="<%= h others.join(', ') %>"
+          style="display:none"></span>
+    <script>
+    //<![CDATA[
+    (function () {
+      function run() {
+        var d = document.getElementById('tr-author-info');
+        if (!d) return;
+        var mail   = d.getAttribute('data-mail')   || '';
+        var others = d.getAttribute('data-others') || '';
+        var p = document.querySelector('.issue p.author') || document.querySelector('p.author');
+        if (!p || p.getAttribute('data-tr-done')) return;
+        p.setAttribute('data-tr-done', '1');
+        if (mail) {
+          var wrap = document.createElement('span');
+          wrap.className = 'tr-author-mail';
+          wrap.appendChild(document.createTextNode(' Mail: '));
+          var a = document.createElement('a');
+          a.href = 'mailto:' + mail; a.textContent = mail;
+          wrap.appendChild(a);
+          var authorLink = p.querySelector('a');
+          if (authorLink && authorLink.nextSibling) {
+            p.insertBefore(wrap, authorLink.nextSibling);
+          } else {
+            p.appendChild(wrap);
+          }
+        }
+        if (others) {
+          p.appendChild(document.createElement('br'));
+          var o = document.createElement('span');
+          o.className = 'tr-author-others';
+          o.appendChild(document.createTextNode('Weitere Adressaten: ' + others));
+          p.appendChild(o);
+        }
+        var box = document.getElementById('tr-contact-box');
+        if (box) box.style.display = 'none';   // gelungen -> Fallback ausblenden
+      }
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', run);
+      } else {
+        run();
+      }
+    })();
+    //]]>
+    </script>
+  <% end %>
+  <p class="redmine-reply-action">
+    <%= link_to sprite_icon('email', l(:button_send_ticket_reply, default: 'Per E-Mail antworten')),
+                new_issue_ticket_reply_path(issue),
+                class: 'icon icon-email' %>
+  </p>
+<% end %>

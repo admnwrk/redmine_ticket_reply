@@ -1,0 +1,152 @@
+<h2><%= l(:label_send_ticket_reply, default: 'Per E-Mail antworten') %> &ndash; #<%= @issue.id %> <%= h @issue.subject %></h2>
+
+<%= form_tag(issue_ticket_reply_path(@issue), method: :post) do %>
+  <div class="box tabular">
+    <p>
+      <label><%= l(:field_mail_to, default: 'An') %> <span class="required">*</span></label>
+      <%= text_field_tag 'to', @to, size: 70 %>
+      <em class="info">Mehrere Adressen mit Komma oder Semikolon trennen.</em>
+    </p>
+    <p>
+      <label>CC</label>
+      <%= text_field_tag 'cc', @cc, size: 70 %>
+    </p>
+    <p>
+      <label>BCC</label>
+      <%= text_field_tag 'bcc', @bcc, size: 70 %>
+    </p>
+    <p>
+      <label><%= l(:field_template, default: 'Vorlage') %></label>
+      <%= select_tag 'template',
+            options_for_select(
+              [[l(:label_external, default: 'Extern (Kunde)'), 'external'],
+               [l(:label_internal, default: 'Intern'), 'internal']],
+              @template) %>
+      <em class="info"><%= l(:text_template_auto, default: 'Vorauswahl anhand der Empfaengerdomaene.') %></em>
+    </p>
+
+    <% if @canned.any? %>
+      <p>
+        <label><%= l(:field_canned, default: 'Textbaustein') %></label>
+        <%= select_tag 'canned_select',
+              options_for_select([[l(:label_choose_canned, default: '— Baustein einfuegen —'), '']] +
+                                 @canned.map { |c| [c[:label], c[:label]] }) %>
+        <em class="info">Fuellt Betreff/Text. Danach frei editierbar.</em>
+      </p>
+    <% end %>
+
+    <p>
+      <label><%= l(:field_subject, default: 'Betreff') %></label>
+      <%= text_field_tag 'subject', @subject, size: 70 %>
+      <em class="info">Den Teil <strong>[&hellip; #<%= @issue.id %>]</strong> bitte stehen lassen &ndash; daran wird die Antwort dem Ticket zugeordnet.</em>
+    </p>
+
+    <p>
+      <label><%= l(:field_notes, default: 'Text') %> <span class="required">*</span></label>
+      <span class="tr-editor" style="display:inline-block;vertical-align:top;">
+        <span class="tabs" style="display:block;margin-bottom:4px;">
+          <a href="#" id="tr-tab-edit" class="tr-tab selected" onclick="trShowEdit();return false;"><%= l(:button_edit, default: 'Bearbeiten') %></a>
+          <a href="#" id="tr-tab-preview" class="tr-tab" onclick="trShowPreview();return false;"><%= l(:label_preview, default: 'Vorschau') %></a>
+        </span>
+        <%= text_area_tag 'body', @body, rows: 14, cols: 70, id: 'body', class: 'wiki-edit', style: 'resize: both; max-width: 100%;' %>
+        <%= wikitoolbar_for 'body' %>
+        <div id="body-preview" class="wiki" style="display:none;border:1px solid #bbb;border-radius:3px;padding:8px;min-height:8em;background:#fff;"></div>
+      </span>
+    </p>
+
+    <p>
+      <label><%= l(:field_include_history, default: 'Verlauf') %></label>
+      <label class="block">
+        <%= check_box_tag 'include_history', '1', false %>
+        <%= l(:text_include_history, default: 'Bisherigen Ticket-Verlauf als Textdatei anhaengen (ohne private Notizen)') %>
+      </label>
+    </p>
+
+    <p>
+      <label><%= l(:field_close_ticket, default: 'Abschluss') %></label>
+      <label class="block">
+        <%= check_box_tag 'close_ticket', '1', false %>
+        <%= l(:text_close_ticket, default: 'Ticket nach dem Senden schliessen') %>
+      </label>
+    </p>
+
+    <% if @issue.attachments.any? %>
+      <p>
+        <label><%= l(:label_attachment_plural, default: 'Anhaenge') %></label>
+        <span>
+          <% @issue.attachments.each do |a| %>
+            <label class="block">
+              <%= check_box_tag 'attachment_ids[]', a.id, false %>
+              <%= h a.filename %> (<%= number_to_human_size(a.filesize) %>)
+            </label>
+          <% end %>
+        </span>
+      </p>
+    <% end %>
+  </div>
+
+  <p>
+    <%= submit_tag l(:button_send, default: 'Senden') %>
+    <%= link_to l(:button_cancel), issue_path(@issue) %>
+  </p>
+<% end %>
+
+<script type="text/javascript">
+  //<![CDATA[
+  (function () {
+    // --- Textbausteine einfuegen ---
+    <% if @canned.any? %>
+    var cannedData = <%= raw(@canned.index_by { |c| c[:label] }
+                                    .transform_values { |c| { subject: c[:subject], body: c[:body] } }
+                                    .to_json.gsub('</', '<\/')) %>;
+    var cannedSel = document.getElementById('canned_select');
+    if (cannedSel) {
+      cannedSel.addEventListener('change', function () {
+        var c = cannedData[this.value];
+        if (!c) { return; }
+        var body = document.getElementById('body');
+        var subj = document.getElementById('subject');
+        if (body && c.body) { body.value = c.body; }
+        if (subj && c.subject) { subj.value = c.subject; }
+      });
+    }
+    <% end %>
+  })();
+
+  // --- Vorschau-Tab ---
+  function trToolbar() { return document.querySelector('.tr-editor .jstElements'); }
+
+  function trShowPreview() {
+    var body = document.getElementById('body');
+    var prev = document.getElementById('body-preview');
+    var tb   = trToolbar();
+    var token = document.querySelector('meta[name=csrf-token]');
+    fetch('<%= preview_issue_ticket_reply_path(@issue) %>', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'X-CSRF-Token': token ? token.getAttribute('content') : ''
+      },
+      body: 'body=' + encodeURIComponent(body.value)
+    })
+      .then(function (r) { return r.text(); })
+      .then(function (html) { prev.innerHTML = html; });
+    body.style.display = 'none';
+    if (tb) { tb.style.display = 'none'; }
+    prev.style.display = 'block';
+    document.getElementById('tr-tab-edit').classList.remove('selected');
+    document.getElementById('tr-tab-preview').classList.add('selected');
+  }
+
+  function trShowEdit() {
+    var body = document.getElementById('body');
+    var prev = document.getElementById('body-preview');
+    var tb   = trToolbar();
+    prev.style.display = 'none';
+    body.style.display = '';
+    if (tb) { tb.style.display = ''; }
+    document.getElementById('tr-tab-preview').classList.remove('selected');
+    document.getElementById('tr-tab-edit').classList.add('selected');
+  }
+  //]]>
+</script>
