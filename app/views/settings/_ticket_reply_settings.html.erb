@@ -1,7 +1,7 @@
 <p>
   <label><%= l(:setting_from_address, default: 'Absenderadresse (From)') %></label>
   <%= text_field_tag 'settings[from_address]', @settings['from_address'], size: 40 %>
-  <em class="info">Leer = globale Redmine-Absenderadresse (aktuell: <%= Setting.mail_from %>). Empfehlung: technik@fake.de</em>
+  <em class="info">Leer = globale Redmine-Absenderadresse (aktuell: <%= Setting.mail_from %>). Empfehlung: absender@mail-adresse.com</em>
 </p>
 <p>
   <label>Reply-To</label>

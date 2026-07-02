@@ -1,3 +1,5 @@
+require 'uri'
+
 class TicketRepliesController < ApplicationController
   before_action :find_issue, :authorize_reply
 
@@ -16,7 +18,7 @@ class TicketRepliesController < ApplicationController
     @cc       = params[:cc].to_s.strip
     @bcc      = params[:bcc].to_s.strip
     @template = params[:template].presence || detect_template(@to)
-    @subject  = params[:subject].presence || mail_subject
+    @subject  = (params[:subject].presence || mail_subject).to_s.gsub(/[\r\n]+/, ' ').strip
     @body     = params[:body].to_s
     @canned   = canned_responses
 
@@ -27,6 +29,15 @@ class TicketRepliesController < ApplicationController
 
     if @to.blank? || @body.strip.blank?
       flash.now[:error] = l(:error_reply_missing_fields, default: 'Empfaenger und Text sind erforderlich.')
+      return render :new
+    end
+
+    # Sicherheit: jede Empfaengeradresse validieren (Format + keine
+    # Steuerzeichen). Blockt fehlerhafte Sends und jegliche Header-Injection.
+    bad = invalid_addresses(split_addrs(@to) + split_addrs(@cc) + split_addrs(@bcc))
+    if bad.any?
+      flash.now[:error] = l(:error_reply_invalid_address, list: bad.join(', '),
+                            default: 'Ungueltige E-Mail-Adresse(n): %{list}')
       return render :new
     end
 
@@ -75,7 +86,8 @@ class TicketRepliesController < ApplicationController
   rescue StandardError => e
     Rails.logger.error("[TicketReply] FEHLER beim Senden (Issue ##{@issue&.id}): #{e.class}: #{e.message}")
     Rails.logger.error(e.backtrace.first(5).join("\n")) if e.backtrace
-    flash.now[:error] = l(:error_reply_failed, default: 'Senden fehlgeschlagen: ') + "#{e.class}: #{e.message}"
+    # Nur generische Meldung an den Benutzer; Details ausschliesslich im Log.
+    flash.now[:error] = l(:error_reply_failed, default: 'Senden fehlgeschlagen. Details siehe Server-Log.')
     render :new
   end
 
@@ -83,13 +95,19 @@ class TicketRepliesController < ApplicationController
   def preview
     render html: render_markup(params[:body].to_s)
   rescue StandardError => e
-    render plain: "Vorschau-Fehler: #{e.message}"
+    Rails.logger.warn("[TicketReply] preview: #{e.class}: #{e.message}")
+    render plain: l(:error_preview_failed, default: 'Vorschau nicht verfuegbar.')
   end
 
   private
 
   def find_issue
     @issue   = Issue.find(params[:issue_id])
+    # Sicherheit: Ticket-Ebenen-Sichtbarkeit erzwingen (die Modul-/Rechte-
+    # pruefung allein deckt z. B. "nur eigene Tickets" nicht ab). Verhindert
+    # das Antworten auf / Exfiltrieren von nicht sichtbaren Tickets.
+    return render_403 unless @issue.visible?
+
     @project = @issue.project
   rescue ActiveRecord::RecordNotFound
     render_404
@@ -149,6 +167,13 @@ class TicketRepliesController < ApplicationController
 
   def split_addrs(str)
     str.to_s.split(/[,;]/).map(&:strip).reject(&:blank?)
+  end
+
+  # Liefert die nicht valide formatierten Adressen zurueck (leeres Array = alles ok).
+  # URI::MailTo::EMAIL_REGEXP ist \A..\z-verankert, schliesst Steuerzeichen
+  # (CR/LF) und Header-Injection aus.
+  def invalid_addresses(list)
+    list.reject { |a| a.to_s.match?(URI::MailTo::EMAIL_REGEXP) }
   end
 
   # ---- Markup / Vorschau --------------------------------------------------
