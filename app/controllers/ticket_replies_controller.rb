@@ -11,6 +11,7 @@ class TicketRepliesController < ApplicationController
     @subject  = mail_subject
     @body     = ''
     @canned   = canned_responses
+    @recent_journals = recent_journals
   end
 
   def create
@@ -21,6 +22,7 @@ class TicketRepliesController < ApplicationController
     @subject  = (params[:subject].presence || mail_subject).to_s.gsub(/[\r\n]+/, ' ').strip
     @body     = params[:body].to_s
     @canned   = canned_responses
+    @recent_journals = recent_journals
 
     attachment_ids = Array(params[:attachment_ids]).map(&:to_i)
     files          = @issue.attachments.select { |a| attachment_ids.include?(a.id) }
@@ -244,6 +246,22 @@ class TicketRepliesController < ApplicationController
     sig = agent_signature
     return body if sig.blank? || body.include?(sig)
     "#{body.rstrip}\n\n#{sig}"
+  end
+
+  # ---- Letzte Journal-Eintraege (read-only unter dem Formular) -------------
+  def journal_preview_count
+    n = plugin_setting('journal_preview_count').to_i
+    n.between?(1, 5) ? n : 1
+  end
+
+  # Neueste zuerst. Nur Eintraege mit Notiz; private Notizen nur, wenn der
+  # Benutzer sie auch im Ticket sehen darf.
+  def recent_journals
+    journals = @issue.journals.select { |j| j.notes.present? }
+    unless User.current.allowed_to?(:view_private_notes, @project)
+      journals = journals.reject(&:private_notes?)
+    end
+    journals.sort_by(&:created_on).last(journal_preview_count).reverse
   end
 
   # ---- Verlauf ------------------------------------------------------------

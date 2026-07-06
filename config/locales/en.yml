@@ -38,3 +38,5 @@ en:
   label_last_sender: "Last email sender"
   label_recipients: "Recipients"
   setting_own_addresses: "Own mailboxes/aliases"
+  setting_journal_preview_count: "Recent journal entries in the form"
+  label_recent_journals: "Recent comments"

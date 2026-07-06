@@ -49,3 +49,9 @@
   <%= text_field_tag 'settings[own_addresses]', @settings['own_addresses'], size: 60 %>
   <em class="info">Komma-getrennt. Diese Adressen werden beim Reply-All (CC-Vorbefuellung) entfernt. From/Reply-To/globale Absenderadresse sind automatisch dabei.</em>
 </p>
+<p>
+  <label><%= l(:setting_journal_preview_count, default: 'Letzte Journal-Eintraege im Formular') %></label>
+  <%= select_tag 'settings[journal_preview_count]',
+        options_for_select((1..5).map { |n| [n.to_s, n.to_s] }, @settings['journal_preview_count'].presence || '1') %>
+  <em class="info">Anzahl der letzten Ticket-Kommentare, die unter dem Antwort-Formular (nur lesend) angezeigt werden.</em>
+</p>

@@ -38,3 +38,5 @@ de:
   label_last_sender: "Letzter Mail-Absender"
   label_recipients: "Empfänger"
   setting_own_addresses: "Eigene Postfächer/Aliase"
+  setting_journal_preview_count: "Letzte Journal-Einträge im Formular"
+  label_recent_journals: "Letzte Kommentare"

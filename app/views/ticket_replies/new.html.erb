@@ -91,6 +91,26 @@
   </p>
 <% end %>
 
+<% if @recent_journals.any? %>
+  <div class="box">
+    <h3><%= l(:label_recent_journals, default: 'Letzte Kommentare') %></h3>
+    <% @recent_journals.each do |j| %>
+      <div class="journal" style="margin-bottom:1em;">
+        <h4 style="margin:0 0 4px 0;">
+          <%= h(j.user ? j.user.name : 'Unbekannt') %>
+          &ndash; <%= format_time(j.created_on) %>
+          <% if j.private_notes? %>
+            <span class="badge badge-private private"><%= l(:field_private_notes) %></span>
+          <% end %>
+        </h4>
+        <div class="wiki" style="border:1px solid #ddd;border-radius:3px;padding:6px 8px;background:#fafafa;">
+          <%= textilizable(j, :notes) %>
+        </div>
+      </div>
+    <% end %>
+  </div>
+<% end %>
+
 <script type="text/javascript">
   //<![CDATA[
   (function () {

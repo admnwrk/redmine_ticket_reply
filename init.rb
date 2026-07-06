@@ -20,7 +20,8 @@ Redmine::Plugin.register :redmine_ticket_reply do
       'auto_append_signature' => '1',                                      # Signatur automatisch anhaengen
       'default_signature'     => '',                                       # Fallback, wenn User keine hat
       'close_status'          => '',                                       # Statusname beim Schliessen (leer => Auto)
-      'own_addresses'         => ''                                        # eigene Postfaecher/Aliase (aus Reply-All entfernen)
+      'own_addresses'         => '',                                       # eigene Postfaecher/Aliase (aus Reply-All entfernen)
+      'journal_preview_count' => '1'                                       # letzte Journal-Eintraege unter dem Formular (1-5)
     },
     partial: 'settings/ticket_reply_settings'
   )
