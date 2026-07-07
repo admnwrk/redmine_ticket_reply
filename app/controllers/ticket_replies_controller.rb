@@ -26,6 +26,7 @@ class TicketRepliesController < ApplicationController
 
     attachment_ids = Array(params[:attachment_ids]).map(&:to_i)
     files          = @issue.attachments.select { |a| attachment_ids.include?(a.id) }
+    uploads        = read_uploads(params[:uploads])
     history_text   = params[:include_history].present? ? build_history_text : nil
     close_request  = params[:close_ticket].present?
 
@@ -56,6 +57,7 @@ class TicketRepliesController < ApplicationController
       body_html:    body_html,
       template:     @template,
       files:        files,
+      uploads:      uploads,
       history_text: history_text,
       author:       User.current
     )
@@ -75,7 +77,7 @@ class TicketRepliesController < ApplicationController
     Rails.logger.info("[TicketReply] Issue ##{@issue.id}: gesendet, Message-ID=#{message.message_id}")
 
     # Mail ist raus. Notiz protokollieren und ggf. schliessen (best effort).
-    note = build_send_note(files, history_text.present?, close_request)
+    note = build_send_note(files, uploads, history_text.present?, close_request)
     closed, close_error = finalize_issue(note, close_request)
 
     flash[:notice] = l(:notice_reply_sent, default: 'E-Mail wurde gesendet.')
@@ -248,6 +250,23 @@ class TicketRepliesController < ApplicationController
     "#{body.rstrip}\n\n#{sig}"
   end
 
+  # ---- Datei-Uploads (nur fuer die Mail, kein Ticket-Attachment) -----------
+  # Liest hochgeladene Dateien ein und respektiert das globale Redmine-Limit
+  # (Setting.attachment_max_size, in KB; 0 = unbegrenzt).
+  def read_uploads(list)
+    max_bytes = Setting.attachment_max_size.to_i * 1024
+    Array(list).filter_map do |f|
+      next unless f.respond_to?(:read) && f.respond_to?(:original_filename)
+      name = File.basename(f.original_filename.to_s)
+      next if name.blank?
+      if max_bytes.positive? && f.size.to_i > max_bytes
+        Rails.logger.warn("[TicketReply] Upload #{name} uebersteigt Limit (#{f.size} > #{max_bytes}), uebersprungen")
+        next
+      end
+      { filename: name, content: f.read, content_type: f.content_type.presence || 'application/octet-stream' }
+    end
+  end
+
   # ---- Letzte Journal-Eintraege (read-only unter dem Formular) -------------
   def journal_preview_count
     n = plugin_setting('journal_preview_count').to_i
@@ -293,12 +312,13 @@ class TicketRepliesController < ApplicationController
   end
 
   # ---- Notiz + Abschluss --------------------------------------------------
-  def build_send_note(files, history_attached, closing)
+  def build_send_note(files, uploads, history_attached, closing)
     note = +"_E-Mail gesendet_ (Vorlage: #{@template})\n\n"
     note << "**An:** #{@to}\n"
     note << "**CC:** #{@cc}\n"   if @cc.present?
     note << "**BCC:** #{@bcc}\n" if @bcc.present?
-    note << "**Anhaenge:** #{files.map(&:filename).join(', ')}\n" if files.any?
+    names = files.map(&:filename) + uploads.map { |u| u[:filename] }
+    note << "**Anhaenge:** #{names.join(', ')}\n" if names.any?
     note << "**Verlauf angehaengt:** ja\n" if history_attached
     note << "\n#{@body}"
     note

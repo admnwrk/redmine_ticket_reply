@@ -40,3 +40,5 @@ en:
   setting_own_addresses: "Own mailboxes/aliases"
   setting_journal_preview_count: "Recent journal entries in the form"
   label_recent_journals: "Recent comments"
+  field_uploads: "New attachments"
+  text_uploads_info: "Files are attached to the email only, not to the ticket."

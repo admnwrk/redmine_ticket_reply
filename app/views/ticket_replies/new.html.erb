@@ -1,6 +1,6 @@
 <h2><%= l(:label_send_ticket_reply, default: 'Per E-Mail antworten') %> &ndash; #<%= @issue.id %> <%= h @issue.subject %></h2>
 
-<%= form_tag(issue_ticket_reply_path(@issue), method: :post) do %>
+<%= form_tag(issue_ticket_reply_path(@issue), method: :post, multipart: true) do %>
   <div class="box tabular">
     <p>
       <label><%= l(:field_mail_to, default: 'An') %> <span class="required">*</span></label>
@@ -70,6 +70,12 @@
       </label>
     </p>
 
+    <p>
+      <label><%= l(:field_uploads, default: 'Neue Anhaenge') %></label>
+      <%= file_field_tag 'uploads[]', multiple: true %>
+      <em class="info"><%= l(:text_uploads_info, default: 'Dateien werden nur der E-Mail angehaengt, nicht dem Ticket.') %></em>
+    </p>
+
     <% if @issue.attachments.any? %>
       <p>
         <label><%= l(:label_attachment_plural, default: 'Anhaenge') %></label>
@@ -89,6 +95,19 @@
     <%= submit_tag l(:button_send, default: 'Senden') %>
     <%= link_to l(:button_cancel), issue_path(@issue) %>
   </p>
+<% end %>
+
+<% if @issue.description.present? %>
+  <div class="issue details" style="margin-bottom:1em;">
+    <h3><%= l(:field_description) %></h3>
+    <p style="margin-top:0;">
+      <%= h(@issue.author ? @issue.author.name : 'Unbekannt') %>
+      &ndash; <%= format_time(@issue.created_on) %>
+    </p>
+    <div class="wiki description">
+      <%= textilizable(@issue, :description) %>
+    </div>
+  </div>
 <% end %>
 
 <% if @recent_journals.any? %>

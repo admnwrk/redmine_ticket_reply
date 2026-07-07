@@ -40,3 +40,5 @@ de:
   setting_own_addresses: "Eigene Postfächer/Aliase"
   setting_journal_preview_count: "Letzte Journal-Einträge im Formular"
   label_recent_journals: "Letzte Kommentare"
+  field_uploads: "Neue Anhänge"
+  text_uploads_info: "Dateien werden nur der E-Mail angehängt, nicht dem Ticket."

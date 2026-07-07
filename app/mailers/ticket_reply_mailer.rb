@@ -3,7 +3,8 @@ class TicketReplyMailer < ActionMailer::Base
 
   # files: Array von Redmine-Attachment-Objekten (NICHT mit der ActionMailer-
   # Methode #attachments verwechseln - daher heisst der Parameter "files").
-  def reply(issue:, to:, subject:, body:, template:, cc: [], bcc: [], files: [], history_text: nil, body_html: nil, author: nil)
+  # uploads: Array von Hashes { filename:, content:, content_type: } aus dem Formular-Upload.
+  def reply(issue:, to:, subject:, body:, template:, cc: [], bcc: [], files: [], uploads: [], history_text: nil, body_html: nil, author: nil)
     @issue     = issue
     @body      = body.to_s
     @body_html = body_html
@@ -19,6 +20,12 @@ class TicketReplyMailer < ActionMailer::Base
       attachments[a.filename] = File.binread(a.diskfile)
     rescue StandardError => e
       Rails.logger.warn("[TicketReply] Anhang #{a.filename}: #{e.message}")
+    end
+
+    Array(uploads).each do |u|
+      attachments[u[:filename]] = { mime_type: u[:content_type], content: u[:content] }
+    rescue StandardError => e
+      Rails.logger.warn("[TicketReply] Upload-Anhang #{u[:filename]}: #{e.message}")
     end
 
     if history_text.present?
