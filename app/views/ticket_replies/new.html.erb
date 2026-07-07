@@ -43,14 +43,14 @@
 
     <p>
       <label><%= l(:field_notes, default: 'Text') %> <span class="required">*</span></label>
-      <span class="tr-editor" style="display:inline-block;vertical-align:top;">
+      <span class="tr-editor" style="display:block;width:95%;">
         <span class="tabs" style="display:block;margin-bottom:4px;">
           <a href="#" id="tr-tab-edit" class="tr-tab selected" onclick="trShowEdit();return false;"><%= l(:button_edit, default: 'Bearbeiten') %></a>
           <a href="#" id="tr-tab-preview" class="tr-tab" onclick="trShowPreview();return false;"><%= l(:label_preview, default: 'Vorschau') %></a>
         </span>
-        <%= text_area_tag 'body', @body, rows: 14, cols: 70, id: 'body', class: 'wiki-edit', style: 'resize: both; max-width: 100%;' %>
+        <%= text_area_tag 'body', @body, rows: 14, id: 'body', class: 'wiki-edit', style: 'width:100%;min-height:22em;resize:vertical;box-sizing:border-box;' %>
         <%= wikitoolbar_for 'body' %>
-        <div id="body-preview" class="wiki" style="display:none;border:1px solid #bbb;border-radius:3px;padding:8px;min-height:8em;background:#fff;"></div>
+        <div id="body-preview" class="wiki" style="display:none;width:100%;min-height:22em;border:1px solid #bbb;border-radius:3px;padding:8px;background:#fff;box-sizing:border-box;"></div>
       </span>
     </p>
 
