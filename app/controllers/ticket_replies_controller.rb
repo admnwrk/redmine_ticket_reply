@@ -12,6 +12,9 @@ class TicketRepliesController < ApplicationController
     @body     = ''
     @canned   = canned_responses
     @recent_journals = recent_journals
+    @from_options  = from_options
+    @from_mode     = 'default'
+    @from_preview  = from_options.to_h { |label, value| [value, resolve_from(value)] }
   end
 
   def create
@@ -23,6 +26,11 @@ class TicketRepliesController < ApplicationController
     @body     = params[:body].to_s
     @canned   = canned_responses
     @recent_journals = recent_journals
+    @from_options = from_options
+    @from_mode    = params[:from_mode].presence || 'default'
+    @from_mode    = 'default' unless @from_options.any? { |_, v| v == @from_mode }
+    @from_preview = @from_options.to_h { |_, value| [value, resolve_from(value)] }
+    from_addr     = resolve_from(@from_mode)
 
     attachment_ids = Array(params[:attachment_ids]).map(&:to_i)
     files          = @issue.attachments.select { |a| attachment_ids.include?(a.id) }
@@ -56,6 +64,7 @@ class TicketRepliesController < ApplicationController
       body:         @body,
       body_html:    body_html,
       template:     @template,
+      from:         from_addr,
       files:        files,
       uploads:      uploads,
       history_text: history_text,
@@ -156,6 +165,54 @@ class TicketRepliesController < ApplicationController
     recips.reject { |a| own.include?(a.downcase) || a.downcase == sender }
           .uniq
           .join(', ')
+  end
+
+  # ---- Absender (From) -----------------------------------------------------
+  def default_from_address
+    plugin_setting('from_address').presence || Setting.mail_from
+  end
+
+  # Nur die reine Mailadresse aus der System-Absenderangabe, auch wenn dort
+  # bereits ein Anzeigename steht (z.B. "Info-Postfach <info@mail-adresse.com>").
+  def from_email_only
+    Mail::Address.new(default_from_address.to_s).address.presence || default_from_address.to_s
+  rescue StandardError
+    default_from_address.to_s
+  end
+
+  def user_display_name_present?
+    User.current.firstname.present? && User.current.lastname.present?
+  end
+
+  # Optionen fuers "Von"-Dropdown im Formular. "Mit Namen" nur, wenn der
+  # Benutzer (z.B. per LDAP) einen Vor-/Nachnamen hinterlegt hat; "Eigene
+  # Adresse" nur, wenn per Konfiguration erlaubt und eine Mailadresse gepflegt ist.
+  def from_options
+    opts = [[l(:label_from_default, default: 'Standard'), 'default']]
+    opts << [l(:label_from_named, default: 'Mit Namen'), 'named'] if user_display_name_present?
+    if plugin_setting('allow_user_full_address') == '1' && User.current.mail.present?
+      opts << [l(:label_from_user_address, default: 'Eigene Adresse'), 'user_address']
+    end
+    opts
+  end
+
+  # Liefert die tatsaechliche From-Angabe fuer den gewaehlten Modus. Bei
+  # "named" bleibt die Mailadresse (System) unveraendert, nur der Anzeigename
+  # wird um Prefix + Benutzername ergaenzt. Bei "user_address" wird die im
+  # Benutzerkonto hinterlegte Mailadresse als Absender verwendet.
+  def resolve_from(mode)
+    case mode
+    when 'named'
+      return default_from_address unless user_display_name_present?
+      prefix = plugin_setting('from_display_prefix').strip
+      label  = [prefix, User.current.name.to_s].reject(&:blank?).join(' ')
+      "#{label} <#{from_email_only}>"
+    when 'user_address'
+      return default_from_address unless plugin_setting('allow_user_full_address') == '1' && User.current.mail.present?
+      "#{User.current.name} <#{User.current.mail}>"
+    else
+      default_from_address
+    end
   end
 
   def detect_template(to)

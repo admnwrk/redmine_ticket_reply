@@ -4,6 +4,17 @@
   <em class="info">Leer = globale Redmine-Absenderadresse (aktuell: <%= Setting.mail_from %>). Empfehlung: absender@mail-adresse.com</em>
 </p>
 <p>
+  <label><%= l(:setting_from_display_prefix, default: 'Von-Anzeigename Prefix') %></label>
+  <%= text_field_tag 'settings[from_display_prefix]', @settings['from_display_prefix'], size: 40 %>
+  <em class="info">Wird im Formular bei der Option &bdquo;Mit Namen&ldquo; vor den Benutzernamen gestellt, z.&nbsp;B. &bdquo;MyCompany&ldquo; &rarr; &bdquo;MyCompany Christian M&ouml;ser &lt;absender@mail-adresse.com&gt;&ldquo;. Die Mailadresse bleibt dabei die oben konfigurierte Systemadresse.</em>
+</p>
+<p>
+  <label><%= l(:setting_allow_user_full_address, default: 'Eigene Mailadresse als Absender erlauben') %></label>
+  <%= hidden_field_tag 'settings[allow_user_full_address]', '0' %>
+  <%= check_box_tag 'settings[allow_user_full_address]', '1', @settings['allow_user_full_address'] == '1' %>
+  <em class="info">Bietet im Formular zusaetzlich die Option, die im Benutzerkonto hinterlegte Mailadresse (z.&nbsp;B. aus LDAP) direkt als Absender zu verwenden, statt der Systemadresse. Erfordert, dass der Mail-Relay beliebige Absenderadressen des eigenen Nutzerkreises akzeptiert (SPF/DMARC pruefen!). Im Zweifel deaktiviert lassen.</em>
+</p>
+<p>
   <label>Reply-To</label>
   <%= text_field_tag 'settings[reply_to]', @settings['reply_to'], size: 40 %>
   <em class="info">Leer = wie From. Sollte das Postfach sein, das per IMAP abgeholt wird.</em>

@@ -2,6 +2,15 @@
 
 <%= form_tag(issue_ticket_reply_path(@issue), method: :post, multipart: true) do %>
   <div class="box tabular">
+    <% if @from_options.size > 1 %>
+      <p>
+        <label><%= l(:field_from, default: 'Von') %></label>
+        <%= select_tag 'from_mode', options_for_select(@from_options, @from_mode), id: 'from_mode' %>
+        <em class="info" id="from-preview"><%= @from_preview[@from_mode] %></em>
+      </p>
+    <% else %>
+      <%= hidden_field_tag 'from_mode', @from_mode %>
+    <% end %>
     <p>
       <label><%= l(:field_mail_to, default: 'An') %> <span class="required">*</span></label>
       <%= text_field_tag 'to', @to, size: 70 %>
@@ -133,6 +142,16 @@
 <script type="text/javascript">
   //<![CDATA[
   (function () {
+    // --- Von-Vorschau ---
+    var fromPreview = <%= raw(@from_preview.to_json.gsub('</', '<\/')) %>;
+    var fromSel  = document.getElementById('from_mode');
+    var fromInfo = document.getElementById('from-preview');
+    if (fromSel && fromInfo) {
+      fromSel.addEventListener('change', function () {
+        fromInfo.textContent = fromPreview[this.value] || '';
+      });
+    }
+
     // --- Textbausteine einfuegen ---
     <% if @canned.any? %>
     var cannedData = <%= raw(@canned.index_by { |c| c[:label] }

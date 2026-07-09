@@ -4,7 +4,7 @@ class TicketReplyMailer < ActionMailer::Base
   # files: Array von Redmine-Attachment-Objekten (NICHT mit der ActionMailer-
   # Methode #attachments verwechseln - daher heisst der Parameter "files").
   # uploads: Array von Hashes { filename:, content:, content_type: } aus dem Formular-Upload.
-  def reply(issue:, to:, subject:, body:, template:, cc: [], bcc: [], files: [], uploads: [], history_text: nil, body_html: nil, author: nil)
+  def reply(issue:, to:, subject:, body:, template:, from: nil, cc: [], bcc: [], files: [], uploads: [], history_text: nil, body_html: nil, author: nil)
     @issue     = issue
     @body      = body.to_s
     @body_html = body_html
@@ -12,7 +12,9 @@ class TicketReplyMailer < ActionMailer::Base
     @marker    = setting('truncate_marker')
     @url       = issue_url_safe(issue)
 
-    from_addr = setting('from_address').presence || Setting.mail_from
+    # from: kommt vom Absender-Dropdown im Formular (System-Default, mit
+    # Namen/Prefix oder komplette User-Adresse); ohne Angabe wie bisher.
+    from_addr = from.presence || setting('from_address').presence || Setting.mail_from
     reply_to  = setting('reply_to').presence || from_addr
 
     Array(files).each do |a|

@@ -13,6 +13,8 @@ Redmine::Plugin.register :redmine_ticket_reply do
     default: {
       'from_address'          => '',                                       # leer => Setting.mail_from
       'reply_to'              => '',                                       # leer => wie From
+      'from_display_prefix'   => '',                                       # Prefix vor dem Benutzernamen im From-Anzeigenamen
+      'allow_user_full_address' => '0',                                    # erlaubt komplette Mailadresse des Users als From
       'internal_domain'       => 'mail-adresse.com',                                # Empfaenger dieser Domaene = intern
       'truncate_marker'       => '----- Bitte oberhalb dieser Linie antworten -----',
       'canned_dir'            => '',                                       # leer => <plugin>/canned
