@@ -48,3 +48,4 @@ de:
   label_from_user_address: "Eigene Adresse"
   setting_from_display_prefix: "Von-Anzeigename Prefix"
   setting_allow_user_full_address: "Eigene Mailadresse als Absender erlauben"
+  text_cc_system_mailbox: "Das System-Postfach wird bei „Eigene Adresse“ automatisch ergänzt."

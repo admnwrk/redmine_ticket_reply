@@ -15,6 +15,7 @@ class TicketRepliesController < ApplicationController
     @from_options  = from_options
     @from_mode     = 'default'
     @from_preview  = from_options.to_h { |label, value| [value, resolve_from(value)] }
+    @system_mailbox_address = system_mailbox_address
   end
 
   def create
@@ -30,7 +31,19 @@ class TicketRepliesController < ApplicationController
     @from_mode    = params[:from_mode].presence || 'default'
     @from_mode    = 'default' unless @from_options.any? { |_, v| v == @from_mode }
     @from_preview = @from_options.to_h { |_, value| [value, resolve_from(value)] }
+    @system_mailbox_address = system_mailbox_address
     from_addr     = resolve_from(@from_mode)
+
+    # Bei "Eigene Adresse" geht die Mail vom persoenlichen Postfach raus; das
+    # System-Postfach (IMAP-Abholung) muss daher in CC, sonst laeuft die
+    # Ticket-Zuordnung nachfolgender Antworten leer.
+    if @from_mode == 'user_address' && system_mailbox_address.present?
+      cc_list = split_addrs(@cc)
+      unless cc_list.any? { |a| a.casecmp?(system_mailbox_address) }
+        cc_list << system_mailbox_address
+        @cc = cc_list.join(', ')
+      end
+    end
 
     attachment_ids = Array(params[:attachment_ids]).map(&:to_i)
     files          = @issue.attachments.select { |a| attachment_ids.include?(a.id) }
@@ -178,6 +191,16 @@ class TicketRepliesController < ApplicationController
     Mail::Address.new(default_from_address.to_s).address.presence || default_from_address.to_s
   rescue StandardError
     default_from_address.to_s
+  end
+
+  # Das per IMAP abgeholte System-Postfach (Reply-To, sonst From). Wird bei
+  # "Eigene Adresse" automatisch in CC eingetragen, damit Antworten weiterhin
+  # dem Ticket zugeordnet werden koennen.
+  def system_mailbox_address
+    raw = plugin_setting('reply_to').presence || default_from_address
+    Mail::Address.new(raw.to_s).address.presence || raw.to_s
+  rescue StandardError
+    raw.to_s
   end
 
   def user_display_name_present?

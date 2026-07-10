@@ -18,7 +18,10 @@
     </p>
     <p>
       <label>CC</label>
-      <%= text_field_tag 'cc', @cc, size: 70 %>
+      <%= text_field_tag 'cc', @cc, size: 70, id: 'cc' %>
+      <% if @system_mailbox_address.present? %>
+        <em class="info" id="cc-hint" style="display:none;"><%= l(:text_cc_system_mailbox, default: 'Das System-Postfach wird bei &bdquo;Eigene Adresse&ldquo; automatisch ergaenzt.') %></em>
+      <% end %>
     </p>
     <p>
       <label>BCC</label>
@@ -144,12 +147,33 @@
   (function () {
     // --- Von-Vorschau ---
     var fromPreview = <%= raw(@from_preview.to_json.gsub('</', '<\/')) %>;
+    var systemMailbox = <%= raw(@system_mailbox_address.to_s.to_json) %>;
     var fromSel  = document.getElementById('from_mode');
     var fromInfo = document.getElementById('from-preview');
-    if (fromSel && fromInfo) {
-      fromSel.addEventListener('change', function () {
-        fromInfo.textContent = fromPreview[this.value] || '';
-      });
+    var ccField  = document.getElementById('cc');
+    var ccHint   = document.getElementById('cc-hint');
+
+    function ccAddresses() {
+      return (ccField.value || '').split(/[,;]/).map(function (a) { return a.trim(); }).filter(Boolean);
+    }
+
+    function applyFromMode() {
+      var mode = fromSel.value;
+      if (fromInfo) { fromInfo.textContent = fromPreview[mode] || ''; }
+      if (!ccField || !systemMailbox) { return; }
+      var addrs = ccAddresses();
+      var has = addrs.some(function (a) { return a.toLowerCase() === systemMailbox.toLowerCase(); });
+      if (mode === 'user_address') {
+        if (!has) { ccField.value = addrs.concat([systemMailbox]).join(', '); }
+        if (ccHint) { ccHint.style.display = ''; }
+      } else if (ccHint) {
+        ccHint.style.display = 'none';
+      }
+    }
+
+    if (fromSel) {
+      fromSel.addEventListener('change', applyFromMode);
+      applyFromMode();
     }
 
     // --- Textbausteine einfuegen ---

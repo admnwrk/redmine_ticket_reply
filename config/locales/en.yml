@@ -48,3 +48,4 @@ en:
   label_from_user_address: "Own address"
   setting_from_display_prefix: "From display-name prefix"
   setting_allow_user_full_address: "Allow user's own mail address as sender"
+  text_cc_system_mailbox: "The system mailbox is automatically added when using \"Own address\"."
