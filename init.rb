@@ -6,7 +6,7 @@ Redmine::Plugin.register :redmine_ticket_reply do
   url         'https://github.com/admnwrk/redmine_ticket_reply'
   description 'Sendet aus einem Ticket heraus E-Mails an frei waehlbare Empfaenger (To/CC/BCC) ' \
               'mit eigener Vorlage fuer interne und externe Empfaenger.'
-  version     '1.4.0'
+  version     '1.5.0'
   requires_redmine version_or_higher: '4.2.0'
 
   settings(
