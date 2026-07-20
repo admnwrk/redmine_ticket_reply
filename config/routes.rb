@@ -5,3 +5,7 @@ end
 post 'issues/:issue_id/ticket_reply/preview',
      to: 'ticket_replies#preview',
      as: 'preview_issue_ticket_reply'
+
+post 'issues/:issue_id/ticket_reply/preview_email',
+     to: 'ticket_replies#preview_email',
+     as: 'preview_email_issue_ticket_reply'

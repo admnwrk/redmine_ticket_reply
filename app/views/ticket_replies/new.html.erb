@@ -1,7 +1,14 @@
+<style>
+  #tr-email-preview-panel { padding: 12px 16px; }
+  .tr-email-preview-headers { border-bottom: 1px solid #ddd; padding-bottom: 8px; margin-bottom: 12px; }
+  .tr-email-preview-headers p { margin: 2px 0; }
+  .tr-email-preview-body { padding: 4px 2px; }
+</style>
+
 <h2><%= l(:label_send_ticket_reply, default: 'Per E-Mail antworten') %> &ndash; #<%= @issue.id %> <%= h @issue.subject %></h2>
 
-<%= form_tag(issue_ticket_reply_path(@issue), method: :post, multipart: true) do %>
-  <div class="box tabular">
+<%= form_tag(issue_ticket_reply_path(@issue), method: :post, multipart: true, id: 'tr-form') do %>
+  <div class="box tabular" id="tr-form-fields">
     <% if @from_options.size > 1 %>
       <p>
         <label><%= l(:field_from, default: 'Von') %></label>
@@ -56,13 +63,8 @@
     <p>
       <label><%= l(:field_notes, default: 'Text') %> <span class="required">*</span></label>
       <span class="tr-editor" style="display:block;width:95%;">
-        <span class="tabs" style="display:block;margin-bottom:4px;">
-          <a href="#" id="tr-tab-edit" class="tr-tab selected" onclick="trShowEdit();return false;"><%= l(:button_edit, default: 'Bearbeiten') %></a>
-          <a href="#" id="tr-tab-preview" class="tr-tab" onclick="trShowPreview();return false;"><%= l(:label_preview, default: 'Vorschau') %></a>
-        </span>
         <%= text_area_tag 'body', @body, rows: 14, id: 'body', class: 'wiki-edit', style: 'width:100%;min-height:22em;resize:vertical;box-sizing:border-box;' %>
         <%= wikitoolbar_for 'body' %>
-        <div id="body-preview" class="wiki" style="display:none;width:100%;min-height:22em;border:1px solid #bbb;border-radius:3px;padding:8px;background:#fff;box-sizing:border-box;"></div>
       </span>
     </p>
 
@@ -103,11 +105,21 @@
     <% end %>
   </div>
 
-  <p>
+  <p id="tr-form-actions">
     <%= submit_tag l(:button_send, default: 'Senden') %>
+    <input type="button" value="<%= l(:button_preview_email, default: 'Vorschau') %>" onclick="trShowEmailPreview();" />
     <%= link_to l(:button_cancel), issue_path(@issue) %>
   </p>
 <% end %>
+
+<div id="tr-email-preview-panel" class="box" style="display:none;">
+  <h3><%= l(:label_email_preview, default: 'So kommt die E-Mail beim Empfaenger an') %></h3>
+  <div id="tr-email-preview-content"></div>
+  <p>
+    <input type="button" value="<%= l(:button_send, default: 'Senden') %>" onclick="trSendFromPreview();" />
+    <input type="button" value="<%= l(:button_continue_editing, default: 'Weiter bearbeiten') %>" onclick="trBackToEdit();" />
+  </p>
+</div>
 
 <% if @issue.description.present? %>
   <div class="issue details" style="margin-bottom:1em;">
@@ -195,40 +207,44 @@
     <% end %>
   })();
 
-  // --- Vorschau-Tab ---
-  function trToolbar() { return document.querySelector('.tr-editor .jstElements'); }
-
-  function trShowPreview() {
-    var body = document.getElementById('body');
-    var prev = document.getElementById('body-preview');
-    var tb   = trToolbar();
+  // --- Vollstaendige E-Mail-Vorschau (Kopfzeilen + Text, Platzhalter aufgeloest) ---
+  function csrfToken() {
     var token = document.querySelector('meta[name=csrf-token]');
-    fetch('<%= preview_issue_ticket_reply_path(@issue) %>', {
+    return token ? token.getAttribute('content') : '';
+  }
+
+  function trShowEmailPreview() {
+    var form = document.getElementById('tr-form');
+    var params = new URLSearchParams();
+    ['to', 'cc', 'bcc', 'subject', 'body', 'from_mode'].forEach(function (name) {
+      var el = form.elements[name];
+      if (el) { params.append(name, el.value); }
+    });
+    fetch('<%= preview_email_issue_ticket_reply_path(@issue) %>', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
-        'X-CSRF-Token': token ? token.getAttribute('content') : ''
+        'X-CSRF-Token': csrfToken()
       },
-      body: 'body=' + encodeURIComponent(body.value)
+      body: params.toString()
     })
       .then(function (r) { return r.text(); })
-      .then(function (html) { prev.innerHTML = html; });
-    body.style.display = 'none';
-    if (tb) { tb.style.display = 'none'; }
-    prev.style.display = 'block';
-    document.getElementById('tr-tab-edit').classList.remove('selected');
-    document.getElementById('tr-tab-preview').classList.add('selected');
+      .then(function (html) {
+        document.getElementById('tr-email-preview-content').innerHTML = html;
+        document.getElementById('tr-form-fields').style.display = 'none';
+        document.getElementById('tr-form-actions').style.display = 'none';
+        document.getElementById('tr-email-preview-panel').style.display = 'block';
+      });
   }
 
-  function trShowEdit() {
-    var body = document.getElementById('body');
-    var prev = document.getElementById('body-preview');
-    var tb   = trToolbar();
-    prev.style.display = 'none';
-    body.style.display = '';
-    if (tb) { tb.style.display = ''; }
-    document.getElementById('tr-tab-preview').classList.remove('selected');
-    document.getElementById('tr-tab-edit').classList.add('selected');
+  function trBackToEdit() {
+    document.getElementById('tr-email-preview-panel').style.display = 'none';
+    document.getElementById('tr-form-fields').style.display = '';
+    document.getElementById('tr-form-actions').style.display = '';
+  }
+
+  function trSendFromPreview() {
+    document.getElementById('tr-form').submit();
   }
   //]]>
 </script>

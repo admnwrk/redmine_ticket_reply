@@ -65,6 +65,11 @@ class TicketRepliesController < ApplicationController
       return render :new
     end
 
+    # Platzhalter (z. B. {{agent_name}}) werden bei Textbausteinen bereits beim
+    # Einfuegen aufgeloest; hier zusaetzlich fuer frei getippte/editierte Texte,
+    # damit Vorschau und tatsaechlich versendete Mail garantiert uebereinstimmen.
+    @subject  = substitute(@subject)
+    @body     = substitute(@body)
     @body     = apply_signature(@body)
     body_html = render_markup(@body)
 
@@ -123,6 +128,33 @@ class TicketRepliesController < ApplicationController
   rescue StandardError => e
     Rails.logger.warn("[TicketReply] preview: #{e.class}: #{e.message}")
     render plain: l(:error_preview_failed, default: 'Vorschau nicht verfuegbar.')
+  end
+
+  # AJAX-Vorschau der VOLLSTAENDIGEN Mail (Kopfzeilen + Text), exakt wie sie beim
+  # Empfaenger ankommt: gleiche Platzhalter-Aufloesung, Signatur und Textauszeichnung
+  # wie im tatsaechlichen Versand (create). Rein lesend, verschickt/speichert nichts.
+  def preview_email
+    to      = params[:to].to_s.strip
+    cc      = params[:cc].to_s.strip
+    bcc     = params[:bcc].to_s.strip
+    from_mode = params[:from_mode].presence || 'default'
+    from_mode = 'default' unless from_options.any? { |_, v| v == from_mode }
+
+    subject = substitute((params[:subject].presence || mail_subject).to_s.gsub(/[\r\n]+/, ' ').strip)
+    body    = substitute(params[:body].to_s)
+    body    = apply_signature(body)
+
+    render partial: 'email_preview', locals: {
+      from:    resolve_from(from_mode),
+      to:      to,
+      cc:      cc,
+      bcc:     bcc,
+      subject: subject,
+      body_html: render_markup(body)
+    }
+  rescue StandardError => e
+    Rails.logger.warn("[TicketReply] preview_email: #{e.class}: #{e.message}")
+    render plain: l(:error_preview_failed, default: 'Vorschau nicht verfuegbar.'), status: :unprocessable_entity
   end
 
   private
