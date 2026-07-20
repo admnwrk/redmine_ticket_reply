@@ -144,13 +144,22 @@ class TicketRepliesController < ApplicationController
     body    = substitute(params[:body].to_s)
     body    = apply_signature(body)
 
+    attachment_ids   = Array(params[:attachment_ids]).map(&:to_i)
+    existing_names    = @issue.attachments.select { |a| attachment_ids.include?(a.id) }.map(&:filename)
+    # Neu ausgewaehlte Uploads liegen im Formular nur als lokale Dateien vor (noch nicht
+    # hochgeladen) - der Client schickt hier nur die Dateinamen zur Anzeige mit, es wird
+    # keine Datei tatsaechlich uebertragen/verarbeitet (reine Lese-Vorschau).
+    new_upload_names  = Array(params[:new_upload_names]).map(&:to_s).reject(&:blank?)
+    attachment_names  = existing_names + new_upload_names
+
     render html: email_preview_html(
       from:    resolve_from(from_mode),
       to:      to,
       cc:      cc,
       bcc:     bcc,
       subject: subject,
-      body_html: render_markup(body)
+      body_html: render_markup(body),
+      attachment_names: attachment_names
     )
   rescue StandardError => e
     Rails.logger.warn("[TicketReply] preview_email: #{e.class}: #{e.message}")
@@ -304,13 +313,18 @@ class TicketRepliesController < ApplicationController
   # Baut die HTML-Vorschau der vollstaendigen Mail direkt als String (keine
   # separate Partial-Datei noetig, die einen Server-/App-Neustart erfordern
   # koennte, bevor Rails neue View-Dateien in Plugin-Verzeichnissen aufgreift).
-  def email_preview_html(from:, to:, cc:, bcc:, subject:, body_html:)
+  def email_preview_html(from:, to:, cc:, bcc:, subject:, body_html:, attachment_names: [])
     rows = +'<div class="tr-email-preview-headers">'
     rows << "<p><strong>#{ERB::Util.h(l(:field_from, default: 'Von'))}:</strong> #{ERB::Util.h(from)}</p>"
     rows << "<p><strong>#{ERB::Util.h(l(:field_mail_to, default: 'An'))}:</strong> #{ERB::Util.h(to)}</p>"
     rows << "<p><strong>CC:</strong> #{ERB::Util.h(cc)}</p>" if cc.present?
     rows << "<p><strong>BCC:</strong> #{ERB::Util.h(bcc)}</p>" if bcc.present?
     rows << "<p><strong>#{ERB::Util.h(l(:field_subject, default: 'Betreff'))}:</strong> #{ERB::Util.h(subject)}</p>"
+    if attachment_names.any?
+      label = ERB::Util.h(l(:label_attachment_plural, default: 'Anhaenge'))
+      list  = attachment_names.map { |n| "<li>#{ERB::Util.h(n)}</li>" }.join
+      rows << "<p><strong>#{label}:</strong></p><ul class=\"tr-email-preview-attachments\">#{list}</ul>"
+    end
     rows << '</div>'
     (rows + '<div class="tr-email-preview-body wiki">' + body_html.to_s + '</div>').html_safe
   end

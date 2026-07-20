@@ -50,5 +50,5 @@ en:
   setting_allow_user_full_address: "Allow user's own mail address as sender"
   text_cc_system_mailbox: "The system mailbox is automatically added when using \"Own address\"."
   button_preview_email: "Preview"
-  label_email_preview: "How the email will arrive for the recipient"
+  label_email_preview: "Email preview (recipient view)"
   button_continue_editing: "Continue editing"
