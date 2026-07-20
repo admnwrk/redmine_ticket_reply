@@ -144,14 +144,14 @@ class TicketRepliesController < ApplicationController
     body    = substitute(params[:body].to_s)
     body    = apply_signature(body)
 
-    render partial: 'email_preview', locals: {
+    render html: email_preview_html(
       from:    resolve_from(from_mode),
       to:      to,
       cc:      cc,
       bcc:     bcc,
       subject: subject,
       body_html: render_markup(body)
-    }
+    )
   rescue StandardError => e
     Rails.logger.warn("[TicketReply] preview_email: #{e.class}: #{e.message}")
     render plain: l(:error_preview_failed, default: 'Vorschau nicht verfuegbar.'), status: :unprocessable_entity
@@ -299,6 +299,20 @@ class TicketRepliesController < ApplicationController
   rescue StandardError => e
     Rails.logger.warn("[TicketReply] render_markup: #{e.message}")
     ('<p>' + ERB::Util.h(text.to_s).gsub("\n", "<br>\n") + '</p>').html_safe
+  end
+
+  # Baut die HTML-Vorschau der vollstaendigen Mail direkt als String (keine
+  # separate Partial-Datei noetig, die einen Server-/App-Neustart erfordern
+  # koennte, bevor Rails neue View-Dateien in Plugin-Verzeichnissen aufgreift).
+  def email_preview_html(from:, to:, cc:, bcc:, subject:, body_html:)
+    rows = +'<div class="tr-email-preview-headers">'
+    rows << "<p><strong>#{ERB::Util.h(l(:field_from, default: 'Von'))}:</strong> #{ERB::Util.h(from)}</p>"
+    rows << "<p><strong>#{ERB::Util.h(l(:field_mail_to, default: 'An'))}:</strong> #{ERB::Util.h(to)}</p>"
+    rows << "<p><strong>CC:</strong> #{ERB::Util.h(cc)}</p>" if cc.present?
+    rows << "<p><strong>BCC:</strong> #{ERB::Util.h(bcc)}</p>" if bcc.present?
+    rows << "<p><strong>#{ERB::Util.h(l(:field_subject, default: 'Betreff'))}:</strong> #{ERB::Util.h(subject)}</p>"
+    rows << '</div>'
+    (rows + '<div class="tr-email-preview-body wiki">' + body_html.to_s + '</div>').html_safe
   end
 
   # ---- Textbausteine ------------------------------------------------------

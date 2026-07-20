@@ -106,8 +106,10 @@
   </div>
 
   <p id="tr-form-actions">
-    <%= submit_tag l(:button_send, default: 'Senden') %>
     <input type="button" value="<%= l(:button_preview_email, default: 'Vorschau') %>" onclick="trShowEmailPreview();" />
+    &nbsp;
+    <%= submit_tag l(:button_send, default: 'Senden') %>
+    &nbsp;
     <%= link_to l(:button_cancel), issue_path(@issue) %>
   </p>
 <% end %>
@@ -116,8 +118,9 @@
   <h3><%= l(:label_email_preview, default: 'So kommt die E-Mail beim Empfaenger an') %></h3>
   <div id="tr-email-preview-content"></div>
   <p>
-    <input type="button" value="<%= l(:button_send, default: 'Senden') %>" onclick="trSendFromPreview();" />
     <input type="button" value="<%= l(:button_continue_editing, default: 'Weiter bearbeiten') %>" onclick="trBackToEdit();" />
+    &nbsp;
+    <input type="button" value="<%= l(:button_send, default: 'Senden') %>" onclick="trSendFromPreview();" />
   </p>
 </div>
 
