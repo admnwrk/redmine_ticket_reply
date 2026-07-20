@@ -263,7 +263,13 @@
   }
 
   function trSendFromPreview() {
-    document.getElementById('tr-form').submit();
+    var form = document.getElementById('tr-form');
+    // form.submit() bypasses the 'submit' event entirely (a JS/DOM quirk), which is
+    // exactly what Redmine's own "leave page with unsaved changes?" warning listens
+    // for to clear itself before navigating away. requestSubmit() dispatches that
+    // event like a real click on the Send button would, so the warning stays quiet.
+    if (form.requestSubmit) { form.requestSubmit(); return; }
+    form.submit();
   }
   //]]>
 </script>

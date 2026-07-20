@@ -69,8 +69,7 @@ class TicketRepliesController < ApplicationController
     # Einfuegen aufgeloest; hier zusaetzlich fuer frei getippte/editierte Texte,
     # damit Vorschau und tatsaechlich versendete Mail garantiert uebereinstimmen.
     @subject  = substitute(@subject)
-    @body     = substitute(@body)
-    @body     = apply_signature(@body)
+    @body     = finalize_body(@body)
     body_html = render_markup(@body)
 
     delivery = TicketReplyMailer.reply(
@@ -141,8 +140,7 @@ class TicketRepliesController < ApplicationController
     from_mode = 'default' unless from_options.any? { |_, v| v == from_mode }
 
     subject = substitute((params[:subject].presence || mail_subject).to_s.gsub(/[\r\n]+/, ' ').strip)
-    body    = substitute(params[:body].to_s)
-    body    = apply_signature(body)
+    body    = finalize_body(params[:body].to_s)
 
     attachment_ids   = Array(params[:attachment_ids]).map(&:to_i)
     existing_names    = @issue.attachments.select { |a| attachment_ids.include?(a.id) }.map(&:filename)
@@ -388,6 +386,25 @@ class TicketRepliesController < ApplicationController
     sig = agent_signature
     return body if sig.blank? || body.include?(sig)
     "#{body.rstrip}\n\n#{sig}"
+  end
+
+  # Ersetzt Platzhalter und haengt bei Bedarf die Signatur an - in dieser Reihenfolge,
+  # damit beides garantiert konsistent ist (kein doppeltes Signatur-Anhaengen).
+  #
+  # Bug (behoben): Wurde ein Textbaustein mit {{signature}} genutzt, war die Signatur
+  # zum Zeitpunkt von apply_signature() bereits eingesetzt (canned_responses loest
+  # Platzhalter schon beim Laden der Vorlage auf); apply_signature() sollte das per
+  # body.include?(sig) erkennen und ueberspringen, tat es aber nicht zuverlaessig
+  # (z. B. bei abweichenden Leerzeichen zwischen den beiden Aufloesungszeitpunkten) -
+  # Ergebnis: Signatur zweimal in Vorschau/Mail. Statt auf einen fehleranfaelligen
+  # Text-Abgleich zu vertrauen, wird jetzt VOR der Aufloesung geprueft, ob der
+  # Rohtext {{signature}} explizit enthaelt; wenn ja, hat der Verfasser die Signatur
+  # bewusst platziert und das automatische Anhaengen wird komplett uebersprungen.
+  def finalize_body(raw_body)
+    explicit_signature = raw_body.to_s.match?(/\{\{\s*signature\s*\}\}/i)
+    body = substitute(raw_body)
+    body = apply_signature(body) unless explicit_signature
+    body
   end
 
   # ---- Datei-Uploads (nur fuer die Mail, kein Ticket-Attachment) -----------
