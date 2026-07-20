@@ -349,11 +349,18 @@ class TicketRepliesController < ApplicationController
         subject = Regexp.last_match(1).strip
         body    = Regexp.last_match(2)
       end
-      { label: label, subject: (subject ? substitute(subject) : nil), body: substitute(body.strip) }
+      { label: label,
+        subject: (subject ? substitute(subject, include_signature: false) : nil),
+        body: substitute(body.strip, include_signature: false) }
     end
   end
 
-  def substitute(text)
+  # include_signature: false laesst {{signature}} unangetastet stehen, statt es
+  # direkt aufzuloesen. Wird von canned_responses genutzt, damit der literale
+  # Platzhalter im Textbaustein erhalten bleibt, bis das Formular abgeschickt wird -
+  # nur so kann finalize_body() zuverlaessig erkennen, dass eine Signatur bewusst
+  # platziert wurde, und das automatische Anhaengen sauber ueberspringen (siehe dort).
+  def substitute(text, include_signature: true)
     map = {
       'id'               => @issue.id.to_s,
       'subject'          => @issue.subject.to_s,
@@ -362,10 +369,19 @@ class TicketRepliesController < ApplicationController
       'author_firstname' => @issue.author&.firstname.to_s,
       'assignee'         => @issue.assigned_to&.name.to_s,
       'agent'            => User.current.firstname.to_s,
-      'agent_name'       => User.current.name.to_s,
-      'signature'        => agent_signature
+      'agent_name'       => User.current.name.to_s
     }
-    text.to_s.gsub(/\{\{\s*([a-z_]+)\s*\}\}/i) { map[Regexp.last_match(1).downcase] || '' }
+    map['signature'] = agent_signature if include_signature
+    text.to_s.gsub(/\{\{\s*([a-z_]+)\s*\}\}/i) do |matched|
+      key = Regexp.last_match(1).downcase
+      if map.key?(key)
+        map[key]
+      elsif key == 'signature'
+        matched # include_signature: false -> Platzhalter unveraendert lassen
+      else
+        ''
+      end
+    end
   end
 
   # ---- Signatur -----------------------------------------------------------
