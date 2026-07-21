@@ -98,13 +98,13 @@
 
     <p>
       <label><%= l(:field_uploads, default: 'Neue Anhaenge') %></label>
-      <div id="tr-dropzone" class="tr-dropzone block">
+      <label id="tr-dropzone" class="tr-dropzone block" for="tr-uploads-input">
         <%= file_field_tag 'uploads[]', multiple: true, id: 'tr-uploads-input' %>
         <span class="tr-dropzone-hint"><%= l(:text_drop_files_here, default: 'oder Dateien/Bilder hierher ziehen') %></span>
         <ul id="tr-uploads-list" class="tr-uploads-list"></ul>
-      </div>
-      <em class="info block"><%= l(:text_uploads_info, default: 'Dateien werden nur der E-Mail angehaengt, nicht dem Ticket.') %></em>
-      <em class="info block"><%= l(:text_inline_image_hint, default: 'Bilder koennen auch direkt in das Textfeld gezogen werden und erscheinen dann eingebettet in der Mail.') %></em>
+      </label>
+      <em class="info"><%= l(:text_uploads_info, default: 'Dateien werden nur der E-Mail angehaengt, nicht dem Ticket.') %></em>
+      <em class="info"><%= l(:text_inline_image_hint, default: 'Bilder koennen auch direkt in das Textfeld gezogen werden und erscheinen dann eingebettet in der Mail.') %></em>
     </p>
 
     <% if @issue.attachments.any? %>
@@ -254,6 +254,9 @@
               e.dataTransfer.setData('text/x-tr-upload-index', String(index));
               e.dataTransfer.effectAllowed = 'copy';
             });
+            // Verhindert, dass ein (versehentlicher) Klick aufs Thumbnail den
+            // Datei-Auswahldialog des umschliessenden <label>s oeffnet.
+            img.addEventListener('click', function (e) { e.preventDefault(); });
             li.appendChild(img);
           }
           var name = document.createElement('span');
@@ -263,7 +266,15 @@
           remove.className = 'tr-remove';
           remove.textContent = '×';
           remove.title = '<%= l(:button_delete, default: "Entfernen") %>';
-          remove.addEventListener('click', function () { removeUploadAt(index); });
+          remove.addEventListener('click', function (e) {
+            // #tr-dropzone ist jetzt ein <label> (fuer die Redmine-eigene CSS-
+            // Ausrichtung, siehe .block) - ohne preventDefault wuerde ein Klick
+            // hier zusaetzlich den Datei-Auswahldialog des zugehoerigen Inputs
+            // oeffnen (Standardverhalten eines <label>).
+            e.preventDefault();
+            e.stopPropagation();
+            removeUploadAt(index);
+          });
           li.appendChild(remove);
           uploadsList.appendChild(li);
         })(files[i], i);
@@ -324,7 +335,13 @@
     var isMarkdown = <%= raw((Setting.text_formatting.to_s != 'textile').to_json) %>;
 
     function imageReference(filename) {
-      return isMarkdown ? '![](' + filename + ')' : '!' + filename + '!';
+      // CommonMark: eine URL mit Leerzeichen (z. B. Screenshot-Dateinamen wie
+      // "2026-07-21 12_00_35-Clipboard.png") ist ohne spitze Klammern ungueltig
+      // und wird NICHT als Bild erkannt, sondern bleibt als reiner Text stehen.
+      // <...> ist der CommonMark-Spec-Weg dafuer, ohne den rohen Dateinamen per
+      // Prozent-Codierung zu veraendern (der Dateiname muss exakt zu a.filename
+      // auf dem Server passen, damit die Attachment-Aufloesung greift).
+      return isMarkdown ? '![](<' + filename + '>)' : '!' + filename + '!';
     }
 
     function insertAtCursor(field, text) {
