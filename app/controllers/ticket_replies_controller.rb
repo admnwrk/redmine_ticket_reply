@@ -328,20 +328,26 @@ class TicketRepliesController < ApplicationController
 
   # ---- Markup / Vorschau --------------------------------------------------
   # Rendert wie ein Ticket-Kommentar (Markdown/Textile gemaess Redmine-Einstellung).
-  # Bewusst OHNE Redmines eingebaute Attachment-Aufloesung (textilizable(text,
-  # attachments: ...)) - deren genaues Verhalten liess sich ohne Redmine-Core-
-  # Quellcode hier nicht zuverlaessig verifizieren und fuehrte in der Praxis dazu,
-  # dass render_markup in den Text-Fallback lief (sichtbares ![](datei.png) statt
-  # eines Bildes). Stattdessen ganz regulaer rendern (bewaehrter, unveraenderter
-  # Code) und die dabei entstehenden <img src="datei.png">-Tags (Markdown/Textile
-  # erzeugen die IMMER, auch wenn "datei.png" nirgendwo aufloesbar ist) per
-  # resolve_inline_image_srcs selbst auf die richtige URL umbiegen - vollstaendig
-  # unter eigener Kontrolle, ohne Annahmen ueber Redmine-interne APIs.
+  #
+  # object: @issue wird bewusst mitgegeben - OHNE einen gueltigen Container-Kontext
+  # versucht Redmines Formatter bei erkannter Bildreferenz-Syntax (![](...) bzw.
+  # !...!) intern trotzdem eine Attachment-Aufloesung und wirft dabei (vermutlich
+  # NoMethodError auf nil), was render_markup in den Text-Fallback fallen liess -
+  # sichtbares "![](datei.png)" statt eines Bildes, obwohl der Upload selbst
+  # erfolgreich war. Mit einem echten Objekt crasht dieser Pfad nicht mehr; da
+  # unsere per Drag&Drop hochgeladenen Bilder NICHT in @issue.attachments stehen
+  # (bewusst unattached, siehe upload_attachment), findet Redmine dort ohnehin
+  # nichts und laesst das <img src="dateiname">-Tag mit dem bloßen Dateinamen
+  # stehen - genau das faengt resolve_inline_image_srcs danach selbst ab.
   def render_markup(text)
-    view_context.textilizable(text.to_s)
+    view_context.textilizable(text.to_s, object: @issue)
   rescue StandardError => e
-    Rails.logger.warn("[TicketReply] render_markup: #{e.message}")
-    ('<p>' + ERB::Util.h(text.to_s).gsub("\n", "<br>\n") + '</p>').html_safe
+    Rails.logger.warn("[TicketReply] render_markup: #{e.class}: #{e.message}")
+    # Fehlerdetails zusaetzlich als HTML-Kommentar (per "Seitenquelltext anzeigen"
+    # sichtbar) - erleichtert die Diagnose, wenn kein Zugriff auf das Server-Log
+    # besteht. Enthaelt keine Nutzereingaben, daher unbedenklich.
+    debug = "<!-- render_markup failed: #{ERB::Util.h("#{e.class}: #{e.message}")} -->\n"
+    (debug + '<p>' + ERB::Util.h(text.to_s).gsub("\n", "<br>\n") + '</p>').html_safe
   end
 
   # Loest per Formular uebermittelte Attachment-Tokens (aus upload_attachment) zu den
