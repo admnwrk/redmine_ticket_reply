@@ -71,8 +71,8 @@ class TicketRepliesController < ApplicationController
     # damit Vorschau und tatsaechlich versendete Mail garantiert uebereinstimmen.
     @subject  = substitute(@subject)
     @body     = finalize_body(@body)
-    body_html = render_markup(@body, inline_attachments)
-    body_html = cid_placeholder_html(body_html)
+    body_html = render_markup(@body)
+    body_html = resolve_inline_image_srcs(body_html, inline_attachments, mode: :outgoing)
 
     delivery = TicketReplyMailer.reply(
       issue:        @issue,
@@ -163,7 +163,7 @@ class TicketRepliesController < ApplicationController
       cc:      cc,
       bcc:     bcc,
       subject: subject,
-      body_html: render_markup(body, inline_attachments),
+      body_html: resolve_inline_image_srcs(render_markup(body), inline_attachments, mode: :preview),
       attachment_names: attachment_names
     )
   rescue StandardError => e
@@ -328,12 +328,17 @@ class TicketRepliesController < ApplicationController
 
   # ---- Markup / Vorschau --------------------------------------------------
   # Rendert wie ein Ticket-Kommentar (Markdown/Textile gemaess Redmine-Einstellung).
-  # attachments: optionale Liste von (unattached) Attachment-Objekten, gegen die
-  # Inline-Bildreferenzen (z. B. ![](bild.png) bzw. !bild.png!) aufgeloest werden -
-  # noetig, weil der Text noch keinem gespeicherten Objekt (Issue/Journal) angehaengt
-  # ist, an dessen eigene .attachments Redmine sonst automatisch nachschauen wuerde.
-  def render_markup(text, attachments = [])
-    view_context.textilizable(text.to_s, attachments: attachments)
+  # Bewusst OHNE Redmines eingebaute Attachment-Aufloesung (textilizable(text,
+  # attachments: ...)) - deren genaues Verhalten liess sich ohne Redmine-Core-
+  # Quellcode hier nicht zuverlaessig verifizieren und fuehrte in der Praxis dazu,
+  # dass render_markup in den Text-Fallback lief (sichtbares ![](datei.png) statt
+  # eines Bildes). Stattdessen ganz regulaer rendern (bewaehrter, unveraenderter
+  # Code) und die dabei entstehenden <img src="datei.png">-Tags (Markdown/Textile
+  # erzeugen die IMMER, auch wenn "datei.png" nirgendwo aufloesbar ist) per
+  # resolve_inline_image_srcs selbst auf die richtige URL umbiegen - vollstaendig
+  # unter eigener Kontrolle, ohne Annahmen ueber Redmine-interne APIs.
+  def render_markup(text)
+    view_context.textilizable(text.to_s)
   rescue StandardError => e
     Rails.logger.warn("[TicketReply] render_markup: #{e.message}")
     ('<p>' + ERB::Util.h(text.to_s).gsub("\n", "<br>\n") + '</p>').html_safe
@@ -345,15 +350,21 @@ class TicketRepliesController < ApplicationController
     Array(tokens).filter_map { |t| Attachment.find_by_token(t.to_s) }
   end
 
-  # Ersetzt die von textilizable erzeugten echten Download-URLs durch neutrale
-  # Platzhalter-Marker. Der Mailer loest diese erst kurz vor dem Versand in echte
-  # cid:-Referenzen auf (das ist der einzige Zeitpunkt, zu dem die von ActionMailer
-  # generierte Content-ID bekannt ist) - fuer die reine Vorschau bleiben stattdessen
-  # die echten, per Redmine-Session erreichbaren Download-URLs erhalten.
-  def cid_placeholder_html(html)
-    html.to_s.gsub(%r{src="[^"]*/attachments/download/(\d+)(?:/[^"]*)?"}) do
-      "src=\"tr-inline-cid-#{Regexp.last_match(1)}\""
+  # Ersetzt src="<dateiname>" (das bare-filename img-Tag, das Markdown/Textile fuer
+  # ![](dateiname) bzw. !dateiname! erzeugt) durch die tatsaechliche Ziel-URL.
+  #
+  # mode: :preview  -> echte Redmine-Download-URL (der Agent hat eine eingeloggte
+  #                     Session, sieht das Bild also direkt in der Browser-Vorschau).
+  #       :outgoing -> neutraler Platzhalter-Marker; der Mailer loest ihn erst kurz
+  #                    vor dem Versand in die von ActionMailer generierte echte
+  #                    cid:-Referenz auf (die ist vorher schlicht noch nicht bekannt).
+  def resolve_inline_image_srcs(html, attachments, mode:)
+    Array(attachments).each do |a|
+      next if a.filename.blank?
+      replacement = mode == :preview ? "/attachments/download/#{a.id}/#{ERB::Util.url_encode(a.filename)}" : "tr-inline-cid-#{a.id}"
+      html = html.gsub(/src="#{Regexp.escape(a.filename)}"/i, "src=\"#{replacement}\"")
     end
+    html
   end
 
   # Baut die HTML-Vorschau der vollstaendigen Mail direkt als String (keine

@@ -5,7 +5,7 @@
   .tr-email-preview-attachments { margin: 2px 0 4px 0; padding-left: 20px; }
   .tr-email-preview-body { padding: 4px 2px; }
 
-  .tr-dropzone { display: block; border: 2px dashed #bbb; border-radius: 4px; padding: 10px; background: #fafafa; }
+  .tr-dropzone { display: block; max-width: 500px; box-sizing: border-box; border: 2px dashed #bbb; border-radius: 4px; padding: 10px; background: #fafafa; }
   .tr-dropzone.tr-dropzone-active { border-color: #3f7fbf; background: #eef5fc; }
   .tr-dropzone-hint { display: inline-block; margin-left: 8px; color: #888; font-size: 0.9em; }
   .tr-uploads-list { list-style: none; margin: 8px 0 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
@@ -343,9 +343,13 @@
       bodyField.form.appendChild(input);
     }
 
+    // Gibt das fetch-Promise zurueck, statt es selbst abzuschliessen - Aufrufer
+    // koennen so z. B. das Entfernen aus der Warteliste an den ERFOLG des Uploads
+    // koppeln, statt es blind sofort auszufuehren (sonst verschwindet die Datei aus
+    // der Liste, auch wenn der Upload eigentlich fehlgeschlagen ist).
     function uploadInlineImage(file, insertReference) {
       var url = '<%= upload_ticket_reply_attachment_path(@issue) %>?filename=' + encodeURIComponent(file.name);
-      fetch(url, {
+      return fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': file.type || 'application/octet-stream',
@@ -353,14 +357,18 @@
         },
         body: file
       })
-        .then(function (r) { return r.json(); })
+        .then(function (r) {
+          if (!r.ok) { throw new Error('upload failed: ' + r.status); }
+          return r.json();
+        })
         .then(function (data) {
           if (!data || !data.upload || !data.upload.token) { throw new Error('no token'); }
           addInlineTokenField(data.upload.token);
           if (insertReference) { insertAtCursor(bodyField, imageReference(file.name)); }
         })
-        .catch(function () {
+        .catch(function (err) {
           window.alert('<%= l(:error_upload_failed, default: "Hochladen fehlgeschlagen.") %> (' + file.name + ')');
+          throw err;
         });
     }
 
@@ -378,9 +386,14 @@
         // (es wird ja jetzt eingebettet dargestellt, nicht mehr separat angehaengt).
         var idxStr = e.dataTransfer.getData('text/x-tr-upload-index');
         if (idxStr !== '' && idxStr != null && draggedUploadIndex !== null) {
-          var file = uploadsInput.files[draggedUploadIndex];
-          if (file) { uploadInlineImage(file, true); removeUploadAt(draggedUploadIndex); }
+          var index = draggedUploadIndex;
+          var file = uploadsInput.files[index];
           draggedUploadIndex = null;
+          if (file) {
+            uploadInlineImage(file, true)
+              .then(function () { removeUploadAt(index); })
+              .catch(function () { /* Fehler wurde bereits per alert() gemeldet - Datei bleibt in der Liste */ });
+          }
           return;
         }
 
