@@ -53,3 +53,4 @@ de:
   label_email_preview: "E-Mail-Vorschau (Empfängeransicht)"
   button_continue_editing: "Weiter bearbeiten"
   text_drop_files_here: "oder Dateien/Bilder hierher ziehen"
+  text_inline_image_hint: "Bilder können auch direkt in das Textfeld gezogen werden und erscheinen dann eingebettet in der Mail."

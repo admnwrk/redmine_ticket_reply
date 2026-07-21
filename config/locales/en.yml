@@ -53,3 +53,4 @@ en:
   label_email_preview: "Email preview (recipient view)"
   button_continue_editing: "Continue editing"
   text_drop_files_here: "or drag files/images here"
+  text_inline_image_hint: "Images can also be dropped directly into the text field to appear embedded in the email."

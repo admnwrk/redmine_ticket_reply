@@ -4,7 +4,11 @@ class TicketReplyMailer < ActionMailer::Base
   # files: Array von Redmine-Attachment-Objekten (NICHT mit der ActionMailer-
   # Methode #attachments verwechseln - daher heisst der Parameter "files").
   # uploads: Array von Hashes { filename:, content:, content_type: } aus dem Formular-Upload.
-  def reply(issue:, to:, subject:, body:, template:, from: nil, cc: [], bcc: [], files: [], uploads: [], history_text: nil, body_html: nil, author: nil)
+  # inline_images: Array von (unattached) Redmine-Attachment-Objekten, die im Text per
+  # Bildreferenz eingebunden sind (aus dem Editor-Drag&Drop) - werden als echte MIME-
+  # Inline-Anhaenge (Content-ID) eingebettet, damit sie auch fuer Empfaenger ohne
+  # Redmine-Zugriff direkt in der Mail sichtbar sind (nicht nur ueber einen Download-Link).
+  def reply(issue:, to:, subject:, body:, template:, from: nil, cc: [], bcc: [], files: [], uploads: [], inline_images: [], history_text: nil, body_html: nil, author: nil)
     @issue     = issue
     @body      = body.to_s
     @body_html = body_html
@@ -22,6 +26,20 @@ class TicketReplyMailer < ActionMailer::Base
       attachments[a.filename] = File.binread(a.diskfile)
     rescue StandardError => e
       Rails.logger.warn("[TicketReply] Anhang #{a.filename}: #{e.message}")
+    end
+
+    # Inline-Bilder als MIME-Content-ID-Anhaenge einbetten. Die vom Controller in
+    # @body_html hinterlegten Platzhalter (tr-inline-cid-<attachment_id>) werden erst
+    # HIER durch die echte, von ActionMailer erst beim Einbetten generierte cid:-URL
+    # ersetzt - vorher ist dieser Wert schlicht nicht bekannt.
+    Array(inline_images).each do |a|
+      next unless a.respond_to?(:readable?) && a.readable?
+      key = "tr-inline-#{a.id}#{File.extname(a.filename.to_s)}"
+      attachments.inline[key] = File.binread(a.diskfile)
+      next unless @body_html.present?
+      @body_html = @body_html.gsub("tr-inline-cid-#{a.id}", attachments[key].url)
+    rescue StandardError => e
+      Rails.logger.warn("[TicketReply] Inline-Bild #{a.filename}: #{e.message}")
     end
 
     Array(uploads).each do |u|

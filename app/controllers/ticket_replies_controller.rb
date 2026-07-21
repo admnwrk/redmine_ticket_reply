@@ -45,11 +45,12 @@ class TicketRepliesController < ApplicationController
       end
     end
 
-    attachment_ids = Array(params[:attachment_ids]).map(&:to_i)
-    files          = @issue.attachments.select { |a| attachment_ids.include?(a.id) }
-    uploads        = read_uploads(params[:uploads])
-    history_text   = params[:include_history].present? ? build_history_text : nil
-    close_request  = params[:close_ticket].present?
+    attachment_ids     = Array(params[:attachment_ids]).map(&:to_i)
+    files              = @issue.attachments.select { |a| attachment_ids.include?(a.id) }
+    uploads            = read_uploads(params[:uploads])
+    inline_attachments = resolve_inline_attachments(params[:inline_attachment_tokens])
+    history_text       = params[:include_history].present? ? build_history_text : nil
+    close_request      = params[:close_ticket].present?
 
     if @to.blank? || @body.strip.blank?
       flash.now[:error] = l(:error_reply_missing_fields, default: 'Empfaenger und Text sind erforderlich.')
@@ -70,7 +71,8 @@ class TicketRepliesController < ApplicationController
     # damit Vorschau und tatsaechlich versendete Mail garantiert uebereinstimmen.
     @subject  = substitute(@subject)
     @body     = finalize_body(@body)
-    body_html = render_markup(@body)
+    body_html = render_markup(@body, inline_attachments)
+    body_html = cid_placeholder_html(body_html)
 
     delivery = TicketReplyMailer.reply(
       issue:        @issue,
@@ -84,6 +86,7 @@ class TicketRepliesController < ApplicationController
       from:         from_addr,
       files:        files,
       uploads:      uploads,
+      inline_images: inline_attachments,
       history_text: history_text,
       author:       User.current
     )
@@ -149,19 +152,43 @@ class TicketRepliesController < ApplicationController
     # keine Datei tatsaechlich uebertragen/verarbeitet (reine Lese-Vorschau).
     new_upload_names  = Array(params[:new_upload_names]).map(&:to_s).reject(&:blank?)
     attachment_names  = existing_names + new_upload_names
+    inline_attachments = resolve_inline_attachments(params[:inline_attachment_tokens])
 
+    # Vorschau bleibt bei den echten Redmine-Download-URLs (keine cid:-Platzhalter):
+    # der Agent betrachtet dies im eigenen, eingeloggten Browser - anders als beim
+    # tatsaechlichen Mailversand, wo der Empfaenger i. d. R. keinen Redmine-Zugriff hat.
     render html: email_preview_html(
       from:    resolve_from(from_mode),
       to:      to,
       cc:      cc,
       bcc:     bcc,
       subject: subject,
-      body_html: render_markup(body),
+      body_html: render_markup(body, inline_attachments),
       attachment_names: attachment_names
     )
   rescue StandardError => e
     Rails.logger.warn("[TicketReply] preview_email: #{e.class}: #{e.message}")
     render plain: l(:error_preview_failed, default: 'Vorschau nicht verfuegbar.'), status: :unprocessable_entity
+  end
+
+  # Nimmt eine per Drag&Drop/Auswahl ins Editor-Fenster gezogene Datei entgegen und
+  # legt sie ueber Redmines eigenes Attachment-Ablageverfahren als "unattached" Anhang
+  # mit Token ab - exakt der Mechanismus, den Redmine-Ticketformulare selbst fuer
+  # Bild-Drag&Drop in Beschreibung/Kommentare nutzen (Attachment#token, spaeter beim
+  # Speichern ueber den Token aufgeloest und dem eigentlichen Objekt zugeordnet).
+  def upload_attachment
+    attachment = Attachment.new(file: request.raw_post)
+    attachment.author       = User.current
+    attachment.filename     = params[:filename].presence || 'upload'
+    attachment.content_type = request.media_type
+    if attachment.save
+      render json: { upload: { id: attachment.id, token: attachment.token } }
+    else
+      render json: { error: attachment.errors.full_messages.join(', ') }, status: :unprocessable_entity
+    end
+  rescue StandardError => e
+    Rails.logger.error("[TicketReply] upload_attachment: #{e.class}: #{e.message}")
+    render json: { error: e.message }, status: :internal_server_error
   end
 
   private
@@ -301,11 +328,32 @@ class TicketRepliesController < ApplicationController
 
   # ---- Markup / Vorschau --------------------------------------------------
   # Rendert wie ein Ticket-Kommentar (Markdown/Textile gemaess Redmine-Einstellung).
-  def render_markup(text)
-    view_context.textilizable(text.to_s)
+  # attachments: optionale Liste von (unattached) Attachment-Objekten, gegen die
+  # Inline-Bildreferenzen (z. B. ![](bild.png) bzw. !bild.png!) aufgeloest werden -
+  # noetig, weil der Text noch keinem gespeicherten Objekt (Issue/Journal) angehaengt
+  # ist, an dessen eigene .attachments Redmine sonst automatisch nachschauen wuerde.
+  def render_markup(text, attachments = [])
+    view_context.textilizable(text.to_s, attachments: attachments)
   rescue StandardError => e
     Rails.logger.warn("[TicketReply] render_markup: #{e.message}")
     ('<p>' + ERB::Util.h(text.to_s).gsub("\n", "<br>\n") + '</p>').html_safe
+  end
+
+  # Loest per Formular uebermittelte Attachment-Tokens (aus upload_attachment) zu den
+  # tatsaechlichen (noch unattached) Attachment-Datensaetzen auf.
+  def resolve_inline_attachments(tokens)
+    Array(tokens).filter_map { |t| Attachment.find_by_token(t.to_s) }
+  end
+
+  # Ersetzt die von textilizable erzeugten echten Download-URLs durch neutrale
+  # Platzhalter-Marker. Der Mailer loest diese erst kurz vor dem Versand in echte
+  # cid:-Referenzen auf (das ist der einzige Zeitpunkt, zu dem die von ActionMailer
+  # generierte Content-ID bekannt ist) - fuer die reine Vorschau bleiben stattdessen
+  # die echten, per Redmine-Session erreichbaren Download-URLs erhalten.
+  def cid_placeholder_html(html)
+    html.to_s.gsub(%r{src="[^"]*/attachments/download/(\d+)(?:/[^"]*)?"}) do
+      "src=\"tr-inline-cid-#{Regexp.last_match(1)}\""
+    end
   end
 
   # Baut die HTML-Vorschau der vollstaendigen Mail direkt als String (keine
