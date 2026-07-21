@@ -107,7 +107,7 @@ class TicketRepliesController < ApplicationController
 
     # Mail ist raus. Notiz protokollieren und ggf. schliessen (best effort).
     note = build_send_note(files, uploads, history_text.present?, close_request)
-    closed, close_error = finalize_issue(note, close_request)
+    closed, close_error = finalize_issue(note, close_request, inline_attachments)
 
     flash[:notice] = l(:notice_reply_sent, default: 'E-Mail wurde gesendet.')
     flash[:notice] = "#{flash[:notice]} #{l(:notice_ticket_closed, default: 'Ticket geschlossen.')}" if closed
@@ -576,7 +576,7 @@ class TicketRepliesController < ApplicationController
   # Notiz schreiben und ggf. schliessen. Schlaegt das Schliessen fehl (z. B. weil
   # das Ticket durch Abhaengigkeiten blockiert ist), bleibt die Notiz erhalten und
   # der Grund wird zurueckgegeben. Gibt [closed?, fehler_oder_nil] zurueck.
-  def finalize_issue(note, close)
+  def finalize_issue(note, close, inline_attachments = [])
     status      = nil
     close_error = nil
 
@@ -593,6 +593,7 @@ class TicketRepliesController < ApplicationController
     journal = @issue.init_journal(User.current, note)
     journal.notify = false
     @issue.status_id = status.id if status
+    attach_inline_images(inline_attachments)
 
     if @issue.save
       [(close && !status.nil? && close_error.nil?), close_error]
@@ -602,11 +603,28 @@ class TicketRepliesController < ApplicationController
       @issue.reload
       j = @issue.init_journal(User.current, note)
       j.notify = false
+      attach_inline_images(inline_attachments)
       @issue.save
       [false, close_error || errs]
     end
   rescue StandardError => e
     Rails.logger.error("[TicketReply] finalize: #{e.class}: #{e.message}")
     [false, e.message]
+  end
+
+  # Haengt die per Drag&Drop im Editor hochgeladenen (bislang "unattached")
+  # Bilder tatsaechlich am Ticket an, waehrend die Notiz gespeichert wird - sie
+  # erscheinen dadurch als echter Anhang im Journal-Eintrag und werden nicht
+  # vom Redmine-internen Aufraeumjob fuer verwaiste Attachments geloescht (der
+  # entfernt unattached Attachments nach kurzer Zeit automatisch).
+  def attach_inline_images(inline_attachments)
+    Array(inline_attachments).each do |a|
+      next if a.container_id.present? # bei einem Retry (siehe oben) schon angehaengt
+      a.container = @issue
+      a.author  ||= User.current
+      a.save
+    rescue StandardError => e
+      Rails.logger.warn("[TicketReply] Inline-Bild #{a.filename} konnte nicht am Ticket angehaengt werden: #{e.class}: #{e.message}")
+    end
   end
 end

@@ -389,6 +389,21 @@
         });
     }
 
+    // Mehrere gleichzeitig gedroppte Bilder NACHEINANDER hochladen/einfuegen statt
+    // parallel: bei mehreren gleichzeitig laufenden Uploads lasen sich die Cursor-
+    // Position beim Einfuegen ueberschneiden, sodass am Ende nur eines der Bilder
+    // im Text landete. Sequentiell verarbeitet ist jede Einfuegung abgeschlossen,
+    // bevor die naechste beginnt.
+    function uploadImagesSequentially(files) {
+      var i = 0;
+      function next() {
+        if (i >= files.length) { return; }
+        var f = files[i++];
+        uploadInlineImage(f, true).catch(function () {}).then(next);
+      }
+      next();
+    }
+
     if (bodyField) {
       ['dragenter', 'dragover'].forEach(function (evt) {
         bodyField.addEventListener(evt, function (e) { e.preventDefault(); e.stopPropagation(); });
@@ -423,7 +438,7 @@
           Array.prototype.forEach.call(e.dataTransfer.files, function (f) {
             (isImageFile(f) ? imgs : others).push(f);
           });
-          imgs.forEach(function (f) { uploadInlineImage(f, true); });
+          uploadImagesSequentially(imgs);
           if (others.length) { addFilesToInput(others); }
         }
       });
