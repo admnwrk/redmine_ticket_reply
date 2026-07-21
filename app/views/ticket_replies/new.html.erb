@@ -316,6 +316,88 @@
         }
       });
     }
+
+    // --- Bilder direkt in den Editor ziehen: Upload ueber Redmines eigenes
+    // Attachment-Ablageverfahren (Token), Einfuegen einer Inline-Bildreferenz an der
+    // Cursor-/Drop-Position - so wie es im normalen Redmine-Ticketformular funktioniert.
+    var bodyField = document.getElementById('body');
+    var isMarkdown = <%= raw((Setting.text_formatting.to_s != 'textile').to_json) %>;
+
+    function imageReference(filename) {
+      return isMarkdown ? '![](' + filename + ')' : '!' + filename + '!';
+    }
+
+    function insertAtCursor(field, text) {
+      var start = field.selectionStart != null ? field.selectionStart : field.value.length;
+      var end = field.selectionEnd != null ? field.selectionEnd : field.value.length;
+      field.value = field.value.slice(0, start) + text + field.value.slice(end);
+      var pos = start + text.length;
+      field.selectionStart = field.selectionEnd = pos;
+    }
+
+    function addInlineTokenField(token) {
+      var input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = 'inline_attachment_tokens[]';
+      input.value = token;
+      bodyField.form.appendChild(input);
+    }
+
+    function uploadInlineImage(file, insertReference) {
+      var url = '<%= upload_ticket_reply_attachment_path(@issue) %>?filename=' + encodeURIComponent(file.name);
+      fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': file.type || 'application/octet-stream',
+          'X-CSRF-Token': csrfToken()
+        },
+        body: file
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (!data || !data.upload || !data.upload.token) { throw new Error('no token'); }
+          addInlineTokenField(data.upload.token);
+          if (insertReference) { insertAtCursor(bodyField, imageReference(file.name)); }
+        })
+        .catch(function () {
+          window.alert('<%= l(:error_upload_failed, default: "Hochladen fehlgeschlagen.") %> (' + file.name + ')');
+        });
+    }
+
+    if (bodyField) {
+      ['dragenter', 'dragover'].forEach(function (evt) {
+        bodyField.addEventListener(evt, function (e) { e.preventDefault(); e.stopPropagation(); });
+      });
+
+      bodyField.addEventListener('drop', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        // Fall 1: Bild aus der eigenen Warteliste hierher gezogen -> hochladen, als
+        // Inline-Referenz einfuegen, und aus der flachen Anhangsliste entfernen
+        // (es wird ja jetzt eingebettet dargestellt, nicht mehr separat angehaengt).
+        var idxStr = e.dataTransfer.getData('text/x-tr-upload-index');
+        if (idxStr !== '' && idxStr != null && draggedUploadIndex !== null) {
+          var file = uploadsInput.files[draggedUploadIndex];
+          if (file) { uploadInlineImage(file, true); removeUploadAt(draggedUploadIndex); }
+          draggedUploadIndex = null;
+          return;
+        }
+
+        // Fall 2: Datei(en) von aussen (Datei-Explorer o. ae.) direkt auf den Editor
+        // gezogen -> Bilder werden sofort hochgeladen und eingebettet, andere Dateien
+        // landen als normaler Anhang in der Warteliste (dort gibt es kein "Einbetten").
+        if (e.dataTransfer.files && e.dataTransfer.files.length) {
+          var imgs = [];
+          var others = [];
+          Array.prototype.forEach.call(e.dataTransfer.files, function (f) {
+            (isImageFile(f) ? imgs : others).push(f);
+          });
+          imgs.forEach(function (f) { uploadInlineImage(f, true); });
+          if (others.length) { addFilesToInput(others); }
+        }
+      });
+    }
   })();
 
   // --- Vollstaendige E-Mail-Vorschau (Kopfzeilen + Text, Platzhalter aufgeloest) ---
@@ -335,6 +417,12 @@
     // Angehakte bestehende Ticket-Anhaenge
     form.querySelectorAll('input[name="attachment_ids[]"]:checked').forEach(function (cb) {
       params.append('attachment_ids[]', cb.value);
+    });
+
+    // Bereits hochgeladene Inline-Bilder (in den Text eingebettet) - fuer die Vorschau
+    // reicht der Token, damit der Server die echte Redmine-Download-URL einsetzen kann.
+    form.querySelectorAll('input[name="inline_attachment_tokens[]"]').forEach(function (i) {
+      if (i.value) { params.append('inline_attachment_tokens[]', i.value); }
     });
 
     // Neu ausgewaehlte Uploads: nur die Dateinamen fuer die Anzeige, die Dateien

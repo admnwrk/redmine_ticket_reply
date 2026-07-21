@@ -54,3 +54,5 @@ de:
   button_continue_editing: "Weiter bearbeiten"
   text_drop_files_here: "oder Dateien/Bilder hierher ziehen"
   text_inline_image_hint: "Bilder können auch direkt in das Textfeld gezogen werden und erscheinen dann eingebettet in der Mail."
+  text_drag_into_editor: "In das Textfeld ziehen, um das Bild einzubetten"
+  error_upload_failed: "Hochladen fehlgeschlagen."

@@ -54,3 +54,5 @@ en:
   button_continue_editing: "Continue editing"
   text_drop_files_here: "or drag files/images here"
   text_inline_image_hint: "Images can also be dropped directly into the text field to appear embedded in the email."
+  text_drag_into_editor: "Drag into the text field to embed this image"
+  error_upload_failed: "Upload failed."
