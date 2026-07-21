@@ -71,8 +71,8 @@ class TicketRepliesController < ApplicationController
     # damit Vorschau und tatsaechlich versendete Mail garantiert uebereinstimmen.
     @subject  = substitute(@subject)
     @body     = finalize_body(@body)
-    body_html = render_markup(@body)
-    body_html = resolve_inline_image_srcs(body_html, inline_attachments, mode: :outgoing)
+    body_html = render_markup(@body, inline_attachments)
+    body_html = cid_placeholder_html(body_html, inline_attachments)
 
     delivery = TicketReplyMailer.reply(
       issue:        @issue,
@@ -163,7 +163,7 @@ class TicketRepliesController < ApplicationController
       cc:      cc,
       bcc:     bcc,
       subject: subject,
-      body_html: resolve_inline_image_srcs(render_markup(body), inline_attachments, mode: :preview),
+      body_html: render_markup(body, inline_attachments),
       attachment_names: attachment_names
     )
   rescue StandardError => e
@@ -327,25 +327,25 @@ class TicketRepliesController < ApplicationController
   end
 
   # ---- Markup / Vorschau --------------------------------------------------
-  # Rendert wie ein Ticket-Kommentar (Markdown/Textile gemaess Redmine-Einstellung).
+  # Rendert wie ein Ticket-Kommentar (Markdown gemaess Redmine-Einstellung).
   #
-  # object: @issue wird bewusst mitgegeben - OHNE einen gueltigen Container-Kontext
-  # versucht Redmines Formatter bei erkannter Bildreferenz-Syntax (![](...) bzw.
-  # !...!) intern trotzdem eine Attachment-Aufloesung und wirft dabei (vermutlich
-  # NoMethodError auf nil), was render_markup in den Text-Fallback fallen liess -
-  # sichtbares "![](datei.png)" statt eines Bildes, obwohl der Upload selbst
-  # erfolgreich war. Mit einem echten Objekt crasht dieser Pfad nicht mehr; da
-  # unsere per Drag&Drop hochgeladenen Bilder NICHT in @issue.attachments stehen
-  # (bewusst unattached, siehe upload_attachment), findet Redmine dort ohnehin
-  # nichts und laesst das <img src="dateiname">-Tag mit dem bloßen Dateinamen
-  # stehen - genau das faengt resolve_inline_image_srcs danach selbst ab.
-  def render_markup(text)
-    view_context.textilizable(text.to_s, object: @issue)
+  # Bestaetigt per Test: CommonMark selbst funktioniert (externe Bild-URLs werden
+  # korrekt gerendert). Bei einer BLOSSEN Dateinamen-Referenz wie ![](datei.png)
+  # versucht Redmine dagegen intern, das gegen eine Anhangsliste aufzuloesen - ohne
+  # Treffer bleibt der rohe Markdown-Text stehen (kein kaputtes <img>, sondern
+  # gar keine Umwandlung). object: @issue allein reicht NICHT: unsere per
+  # Drag&Drop hochgeladenen Bilder sind bewusst NICHT an @issue haengen (noch
+  # unattached, siehe upload_attachment), also liefert @issue.attachments keinen
+  # Treffer. Deshalb zusaetzlich attachments: - das ist der Mechanismus, mit dem
+  # Redmine Text gegen eine explizite, noch nicht gespeicherte Anhangsliste
+  # aufloest (z. B. fuer genau diesen "Vorschau vor dem Speichern"-Anwendungsfall).
+  def render_markup(text, attachments = [])
+    view_context.textilizable(text.to_s, object: @issue, attachments: attachments)
   rescue StandardError => e
     Rails.logger.warn("[TicketReply] render_markup: #{e.class}: #{e.message}")
-    # Fehlerdetails zusaetzlich als HTML-Kommentar (per "Seitenquelltext anzeigen"
-    # sichtbar) - erleichtert die Diagnose, wenn kein Zugriff auf das Server-Log
-    # besteht. Enthaelt keine Nutzereingaben, daher unbedenklich.
+    # Fehlerdetails zusaetzlich als HTML-Kommentar (per Element-Inspector im
+    # AJAX-eingefuegten Vorschau-DOM sichtbar) - erleichtert die Diagnose, wenn
+    # kein Zugriff auf das Server-Log besteht. Enthaelt keine Nutzereingaben.
     debug = "<!-- render_markup failed: #{ERB::Util.h("#{e.class}: #{e.message}")} -->\n"
     (debug + '<p>' + ERB::Util.h(text.to_s).gsub("\n", "<br>\n") + '</p>').html_safe
   end
@@ -356,19 +356,19 @@ class TicketRepliesController < ApplicationController
     Array(tokens).filter_map { |t| Attachment.find_by_token(t.to_s) }
   end
 
-  # Ersetzt src="<dateiname>" (das bare-filename img-Tag, das Markdown/Textile fuer
-  # ![](dateiname) bzw. !dateiname! erzeugt) durch die tatsaechliche Ziel-URL.
+  # Nur fuer den tatsaechlichen Versand: ersetzt die von Redmines eigener
+  # Attachment-Aufloesung erzeugte echte Download-URL (/attachments/download/ID/...)
+  # durch einen neutralen Platzhalter-Marker. Der Mailer loest diesen erst kurz vor
+  # dem Versand in die von ActionMailer generierte echte cid:-Referenz auf (die ist
+  # vorher schlicht noch nicht bekannt). Der Empfaenger-Server steht hinter einer
+  # Firewall und koennte den echten Download-Link ohnehin nie erreichen - das Bild
+  # MUSS als eingebetteter MIME-Anhang mitgeschickt werden, nicht nur verlinkt.
   #
-  # mode: :preview  -> echte Redmine-Download-URL (der Agent hat eine eingeloggte
-  #                     Session, sieht das Bild also direkt in der Browser-Vorschau).
-  #       :outgoing -> neutraler Platzhalter-Marker; der Mailer loest ihn erst kurz
-  #                    vor dem Versand in die von ActionMailer generierte echte
-  #                    cid:-Referenz auf (die ist vorher schlicht noch nicht bekannt).
-  def resolve_inline_image_srcs(html, attachments, mode:)
+  # Fuer die reine Vorschau ist KEINE Ersetzung noetig: die von Redmine aufgeloeste
+  # echte Download-URL ist im eingeloggten Browser des Agents direkt erreichbar.
+  def cid_placeholder_html(html, attachments)
     Array(attachments).each do |a|
-      next if a.filename.blank?
-      replacement = mode == :preview ? "/attachments/download/#{a.id}/#{ERB::Util.url_encode(a.filename)}" : "tr-inline-cid-#{a.id}"
-      html = html.gsub(/src="#{Regexp.escape(a.filename)}"/i, "src=\"#{replacement}\"")
+      html = html.gsub(%r{src="[^"]*/attachments/download/#{a.id}(?:/[^"]*)?"}i, "src=\"tr-inline-cid-#{a.id}\"")
     end
     html
   end
