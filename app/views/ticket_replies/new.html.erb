@@ -4,6 +4,17 @@
   .tr-email-preview-headers p { margin: 2px 0; }
   .tr-email-preview-attachments { margin: 2px 0 4px 0; padding-left: 20px; }
   .tr-email-preview-body { padding: 4px 2px; }
+
+  .tr-dropzone { display: block; border: 2px dashed #bbb; border-radius: 4px; padding: 10px; background: #fafafa; }
+  .tr-dropzone.tr-dropzone-active { border-color: #3f7fbf; background: #eef5fc; }
+  .tr-dropzone-hint { display: inline-block; margin-left: 8px; color: #888; font-size: 0.9em; }
+  .tr-uploads-list { list-style: none; margin: 8px 0 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+  .tr-uploads-list li { display: flex; align-items: center; gap: 6px; background: #fff; border: 1px solid #ccc; border-radius: 4px; padding: 3px 6px; font-size: 0.9em; }
+  .tr-uploads-list img.tr-thumb { width: 28px; height: 28px; object-fit: cover; border-radius: 2px; }
+  .tr-uploads-list .tr-remove { cursor: pointer; color: #a00; font-weight: bold; padding: 0 3px; }
+
+  .tr-email-preview-images { display: flex; flex-wrap: wrap; gap: 10px; margin: 6px 0 10px 0; }
+  .tr-email-preview-images img { max-width: 220px; max-height: 220px; border: 1px solid #ddd; border-radius: 4px; }
 </style>
 
 <h2><%= l(:label_send_ticket_reply, default: 'Per E-Mail antworten') %> &ndash; #<%= @issue.id %> <%= h @issue.subject %></h2>
@@ -87,7 +98,11 @@
 
     <p>
       <label><%= l(:field_uploads, default: 'Neue Anhaenge') %></label>
-      <%= file_field_tag 'uploads[]', multiple: true %>
+      <span id="tr-dropzone" class="tr-dropzone">
+        <%= file_field_tag 'uploads[]', multiple: true, id: 'tr-uploads-input' %>
+        <span class="tr-dropzone-hint"><%= l(:text_drop_files_here, default: 'oder Dateien/Bilder hierher ziehen') %></span>
+        <ul id="tr-uploads-list" class="tr-uploads-list"></ul>
+      </span>
       <em class="info"><%= l(:text_uploads_info, default: 'Dateien werden nur der E-Mail angehaengt, nicht dem Ticket.') %></em>
     </p>
 
@@ -209,6 +224,88 @@
       });
     }
     <% end %>
+
+    // --- Drag & Drop fuer Anhaenge/Bilder (wie im Standard-Redmine-Ticketformular) ---
+    var dropzone = document.getElementById('tr-dropzone');
+    var uploadsInput = document.getElementById('tr-uploads-input');
+    var uploadsList = document.getElementById('tr-uploads-list');
+
+    function isImageFile(file) {
+      return file.type && file.type.indexOf('image/') === 0;
+    }
+
+    function renderUploadsList() {
+      uploadsList.innerHTML = '';
+      var files = uploadsInput.files;
+      for (var i = 0; i < files.length; i++) {
+        (function (file, index) {
+          var li = document.createElement('li');
+          if (isImageFile(file)) {
+            var img = document.createElement('img');
+            img.className = 'tr-thumb';
+            img.src = URL.createObjectURL(file);
+            li.appendChild(img);
+          }
+          var name = document.createElement('span');
+          name.textContent = file.name;
+          li.appendChild(name);
+          var remove = document.createElement('span');
+          remove.className = 'tr-remove';
+          remove.textContent = '×';
+          remove.title = '<%= l(:button_delete, default: "Entfernen") %>';
+          remove.addEventListener('click', function () { removeUploadAt(index); });
+          li.appendChild(remove);
+          uploadsList.appendChild(li);
+        })(files[i], i);
+      }
+    }
+
+    // Datei-Inputs lassen sich nicht direkt manipulieren; ueber ein DataTransfer-Objekt
+    // wird eine neue FileList gebaut und dem Input zugewiesen (Standardtechnik fuer
+    // Drag&Drop-Uploads und zum Entfernen einzelner Dateien aus einem <input type=file>).
+    function addFilesToInput(newFiles) {
+      var dt = new DataTransfer();
+      Array.prototype.forEach.call(uploadsInput.files, function (f) { dt.items.add(f); });
+      Array.prototype.forEach.call(newFiles, function (f) { dt.items.add(f); });
+      uploadsInput.files = dt.files;
+      renderUploadsList();
+    }
+
+    function removeUploadAt(index) {
+      var dt = new DataTransfer();
+      Array.prototype.forEach.call(uploadsInput.files, function (f, i) {
+        if (i !== index) { dt.items.add(f); }
+      });
+      uploadsInput.files = dt.files;
+      renderUploadsList();
+    }
+
+    if (dropzone && uploadsInput) {
+      uploadsInput.addEventListener('change', function () { addFilesToInput([]); });
+
+      ['dragenter', 'dragover'].forEach(function (evt) {
+        dropzone.addEventListener(evt, function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          dropzone.classList.add('tr-dropzone-active');
+        });
+      });
+      ['dragleave', 'dragend'].forEach(function (evt) {
+        dropzone.addEventListener(evt, function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          dropzone.classList.remove('tr-dropzone-active');
+        });
+      });
+      dropzone.addEventListener('drop', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        dropzone.classList.remove('tr-dropzone-active');
+        if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) {
+          addFilesToInput(e.dataTransfer.files);
+        }
+      });
+    }
   })();
 
   // --- Vollstaendige E-Mail-Vorschau (Kopfzeilen + Text, Platzhalter aufgeloest) ---
@@ -231,11 +328,15 @@
     });
 
     // Neu ausgewaehlte Uploads: nur die Dateinamen fuer die Anzeige, die Dateien
-    // selbst werden erst beim tatsaechlichen Senden hochgeladen.
+    // selbst werden erst beim tatsaechlichen Senden hochgeladen. Bilddateien werden
+    // zusaetzlich clientseitig als Thumbnail dargestellt (siehe unten) - sie liegen
+    // ja nur lokal im Browser vor und koennen serverseitig noch nicht gerendert werden.
     var uploadsInput = form.elements['uploads[]'];
+    var imageFiles = [];
     if (uploadsInput && uploadsInput.files) {
       Array.prototype.forEach.call(uploadsInput.files, function (f) {
         params.append('new_upload_names[]', f.name);
+        if (f.type && f.type.indexOf('image/') === 0) { imageFiles.push(f); }
       });
     }
 
@@ -249,7 +350,20 @@
     })
       .then(function (r) { return r.text(); })
       .then(function (html) {
-        document.getElementById('tr-email-preview-content').innerHTML = html;
+        var content = document.getElementById('tr-email-preview-content');
+        content.innerHTML = html;
+        if (imageFiles.length) {
+          var gallery = document.createElement('div');
+          gallery.className = 'tr-email-preview-images';
+          imageFiles.forEach(function (f) {
+            var img = document.createElement('img');
+            img.src = URL.createObjectURL(f);
+            img.alt = f.name;
+            img.title = f.name;
+            gallery.appendChild(img);
+          });
+          content.appendChild(gallery);
+        }
         document.getElementById('tr-form-fields').style.display = 'none';
         document.getElementById('tr-form-actions').style.display = 'none';
         document.getElementById('tr-email-preview-panel').style.display = 'block';
