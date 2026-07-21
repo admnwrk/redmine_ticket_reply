@@ -46,8 +46,7 @@ class TicketRepliesController < ApplicationController
     end
 
     attachment_ids     = Array(params[:attachment_ids]).map(&:to_i)
-    files              = @issue.attachments.select { |a| attachment_ids.include?(a.id) }
-    uploads            = read_uploads(params[:uploads])
+    existing_files     = @issue.attachments.select { |a| attachment_ids.include?(a.id) }
     inline_attachments = resolve_inline_attachments(params[:inline_attachment_tokens])
     history_text       = params[:include_history].present? ? build_history_text : nil
     close_request      = params[:close_ticket].present?
@@ -65,6 +64,12 @@ class TicketRepliesController < ApplicationController
                             default: 'Ungueltige E-Mail-Adresse(n): %{list}')
       return render :new
     end
+
+    # Erst NACH allen Validierungen echte Attachments anlegen (siehe
+    # create_and_attach_uploads) - sonst wuerde bei einem abgebrochenen Versand
+    # trotzdem schon eine Datei am Ticket haengen bleiben.
+    new_files = create_and_attach_uploads(params[:uploads])
+    files     = existing_files + new_files
 
     # Platzhalter (z. B. {{agent_name}}) werden bei Textbausteinen bereits beim
     # Einfuegen aufgeloest; hier zusaetzlich fuer frei getippte/editierte Texte,
@@ -85,7 +90,6 @@ class TicketRepliesController < ApplicationController
       template:     @template,
       from:         from_addr,
       files:        files,
-      uploads:      uploads,
       inline_images: inline_attachments,
       history_text: history_text,
       author:       User.current
@@ -106,7 +110,7 @@ class TicketRepliesController < ApplicationController
     Rails.logger.info("[TicketReply] Issue ##{@issue.id}: gesendet, Message-ID=#{message.message_id}")
 
     # Mail ist raus. Notiz protokollieren und ggf. schliessen (best effort).
-    note = build_send_note(files, uploads, history_text.present?, close_request)
+    note = build_send_note(files, history_text.present?, close_request)
     closed, close_error = finalize_issue(note, close_request, inline_attachments)
 
     flash[:notice] = l(:notice_reply_sent, default: 'E-Mail wurde gesendet.')
@@ -491,7 +495,18 @@ class TicketRepliesController < ApplicationController
   # ---- Datei-Uploads (nur fuer die Mail, kein Ticket-Attachment) -----------
   # Liest hochgeladene Dateien ein und respektiert das globale Redmine-Limit
   # (Setting.attachment_max_size, in KB; 0 = unbegrenzt).
-  def read_uploads(list)
+  # Frueher wurden neue Uploads NUR der Mail beigefuegt, nie am Ticket gespeichert
+  # (der urspruengliche Hinweistext im Formular sagte das sogar explizit) - fuer
+  # "Beweis-Mails" ist das nicht tragbar: ein Anhang, der nur in der versendeten
+  # Mail existiert, ist im Ticket nicht mehr nachvollziehbar/rekonstruierbar. Jetzt
+  # werden neue Uploads als echte Redmine-Attachments direkt am Ticket gespeichert
+  # (Rueckgabewert kann wie @issue.attachments-Eintraege behandelt werden - fuer
+  # den Mailversand wird .diskfile gelesen, siehe TicketReplyMailer).
+  #
+  # Wird bewusst erst NACH allen Validierungen in #create aufgerufen (nicht vorher):
+  # sonst wuerde bei einem fehlgeschlagenen Versand (z. B. ungueltige Adresse) trotzdem
+  # schon eine Datei am Ticket haengen bleiben, obwohl gar keine Mail rausging.
+  def create_and_attach_uploads(list)
     max_bytes = Setting.attachment_max_size.to_i * 1024
     Array(list).filter_map do |f|
       next unless f.respond_to?(:read) && f.respond_to?(:original_filename)
@@ -501,7 +516,13 @@ class TicketRepliesController < ApplicationController
         Rails.logger.warn("[TicketReply] Upload #{name} uebersteigt Limit (#{f.size} > #{max_bytes}), uebersprungen")
         next
       end
-      { filename: name, content: f.read, content_type: f.content_type.presence || 'application/octet-stream' }
+      a = Attachment.new(file: f)
+      a.author    = User.current
+      a.container = @issue
+      a.save ? a : nil
+    rescue StandardError => e
+      Rails.logger.warn("[TicketReply] Upload #{name} konnte nicht gespeichert werden: #{e.class}: #{e.message}")
+      nil
     end
   end
 
@@ -550,12 +571,12 @@ class TicketRepliesController < ApplicationController
   end
 
   # ---- Notiz + Abschluss --------------------------------------------------
-  def build_send_note(files, uploads, history_attached, closing)
+  def build_send_note(files, history_attached, closing)
     note = +"_E-Mail gesendet_ (Vorlage: #{@template})\n\n"
     note << "**An:** #{@to}\n"
     note << "**CC:** #{@cc}\n"   if @cc.present?
     note << "**BCC:** #{@bcc}\n" if @bcc.present?
-    names = files.map(&:filename) + uploads.map { |u| u[:filename] }
+    names = files.map(&:filename)
     note << "**Anhaenge:** #{names.join(', ')}\n" if names.any?
     note << "**Verlauf angehaengt:** ja\n" if history_attached
     note << "\n#{@body}"

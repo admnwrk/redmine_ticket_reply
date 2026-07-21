@@ -1,14 +1,17 @@
 class TicketReplyMailer < ActionMailer::Base
   layout false
 
-  # files: Array von Redmine-Attachment-Objekten (NICHT mit der ActionMailer-
-  # Methode #attachments verwechseln - daher heisst der Parameter "files").
-  # uploads: Array von Hashes { filename:, content:, content_type: } aus dem Formular-Upload.
-  # inline_images: Array von (unattached) Redmine-Attachment-Objekten, die im Text per
-  # Bildreferenz eingebunden sind (aus dem Editor-Drag&Drop) - werden als echte MIME-
-  # Inline-Anhaenge (Content-ID) eingebettet, damit sie auch fuer Empfaenger ohne
-  # Redmine-Zugriff direkt in der Mail sichtbar sind (nicht nur ueber einen Download-Link).
-  def reply(issue:, to:, subject:, body:, template:, from: nil, cc: [], bcc: [], files: [], uploads: [], inline_images: [], history_text: nil, body_html: nil, author: nil)
+  # files: Array von Redmine-Attachment-Objekten (NICHT mit der ActionMailer-Methode
+  # #attachments verwechseln - daher heisst der Parameter "files"). Umfasst sowohl
+  # bereits am Ticket vorhandene, angehakte Anhaenge als auch neu hochgeladene Dateien
+  # (die inzwischen VOR dem Mailversand als echte Attachments am Ticket gespeichert
+  # werden, siehe TicketRepliesController#create_and_attach_uploads).
+  # inline_images: Array von (noch unattached) Redmine-Attachment-Objekten, die im
+  # Text per Bildreferenz eingebunden sind (aus dem Editor-Drag&Drop) - werden als
+  # echte MIME-Inline-Anhaenge (Content-ID) eingebettet, damit sie auch fuer
+  # Empfaenger ohne Redmine-Zugriff direkt in der Mail sichtbar sind (nicht nur ueber
+  # einen Download-Link, den ein Empfaenger hinter einer Firewall nie erreichen koennte).
+  def reply(issue:, to:, subject:, body:, template:, from: nil, cc: [], bcc: [], files: [], inline_images: [], history_text: nil, body_html: nil, author: nil)
     @issue     = issue
     @body      = body.to_s
     @body_html = body_html
@@ -29,23 +32,20 @@ class TicketReplyMailer < ActionMailer::Base
     end
 
     # Inline-Bilder als MIME-Content-ID-Anhaenge einbetten. Die vom Controller in
-    # @body_html hinterlegten Platzhalter (tr-inline-cid-<attachment_id>) werden erst
-    # HIER durch die echte, von ActionMailer erst beim Einbetten generierte cid:-URL
-    # ersetzt - vorher ist dieser Wert schlicht nicht bekannt.
+    # @body_html hinterlegten Platzhalter (tr-inline-cid-<attachment_id>) werden NICHT
+    # hier, sondern erst in der View durch attachments[key].url ersetzt (siehe
+    # _inline_images.html.erb) - das ist der von Rails vorgesehene Ort/Zeitpunkt fuer
+    # den Aufruf, damit die Multipart/related-Struktur der Mail korrekt aufgebaut
+    # wird. Eine Ersetzung schon hier (ausserhalb des View-Renderings) fuehrte dazu,
+    # dass die Mail beim Empfaenger nur als roher HTML-Quelltext ankam statt gerendert.
+    @inline_cid_placeholders = {}
     Array(inline_images).each do |a|
       next unless a.respond_to?(:readable?) && a.readable?
       key = "tr-inline-#{a.id}#{File.extname(a.filename.to_s)}"
       attachments.inline[key] = File.binread(a.diskfile)
-      next unless @body_html.present?
-      @body_html = @body_html.gsub("tr-inline-cid-#{a.id}", attachments[key].url)
+      @inline_cid_placeholders["tr-inline-cid-#{a.id}"] = key
     rescue StandardError => e
       Rails.logger.warn("[TicketReply] Inline-Bild #{a.filename}: #{e.message}")
-    end
-
-    Array(uploads).each do |u|
-      attachments[u[:filename]] = { mime_type: u[:content_type], content: u[:content] }
-    rescue StandardError => e
-      Rails.logger.warn("[TicketReply] Upload-Anhang #{u[:filename]}: #{e.message}")
     end
 
     if history_text.present?
@@ -65,6 +65,22 @@ class TicketReplyMailer < ActionMailer::Base
       format.html { render tmpl } unless plain_only
     end
   end
+
+  # Called from the HTML view templates (external_reply/internal_reply) - MUST run
+  # during view rendering, not earlier in #reply, for attachments[key].url to build
+  # a correctly structured multipart/related MIME message. Doing this substitution
+  # outside the view (e.g. directly on @body_html inside #reply) produced a broken
+  # multipart structure where the recipient saw the raw HTML source as plain text
+  # instead of a rendered message.
+  def resolved_body_html
+    html = @body_html
+    return html unless html.present? && @inline_cid_placeholders.present?
+    @inline_cid_placeholders.each do |placeholder, key|
+      html = html.gsub(placeholder, attachments[key].url)
+    end
+    html
+  end
+  helper_method :resolved_body_html if respond_to?(:helper_method)
 
   private
 
